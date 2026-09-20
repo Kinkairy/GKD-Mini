@@ -1,0 +1,266 @@
+#!/bin/sh
+# Dedicated-R USB owner: RNDIS/SSH by default, with an explicit whole-system
+# card LUN only while EXPORT SYSTEM CARD is active.
+set -eu
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+testing=${GKD_RECOVERY_USB_TESTING-0}
+configfs=${GKD_RECOVERY_USB_CONFIGFS-/sys/kernel/config}
+udc_root=${GKD_RECOVERY_USB_UDC_ROOT-/sys/class/udc}
+mounts=${GKD_RECOVERY_USB_MOUNTS-/proc/mounts}
+ssh_hook=${GKD_RECOVERY_USB_SSH_HOOK-/usr/lib/gkd-usb-round64/ssh-rndis-hook}
+device=${GKD_RECOVERY_USB_DEVICE-/dev/mmcblk0}
+gadget=$configfs/usb_gadget/gkd_recovery
+
+write_attr()
+{
+	if [ "$testing" = 1 ] && [ ! -e "$1" ]; then
+		mkdir -p "${1%/*}"
+		: >"$1"
+	fi
+	[ -e "$1" ] && printf '%s' "$2" >"$1"
+}
+
+ssh_control()
+{
+	[ -x "$ssh_hook" ] || return 1
+	ROUND64_RESCUE=p1-root-offline \
+	ROUND64_SSH_IDENTITY_DIR=/run/gkd-round64-ssh \
+		"$ssh_hook" "$1"
+}
+
+teardown()
+{
+	failed=0
+	ssh_control stop >/dev/null 2>&1 || failed=1
+	if [ -d "$gadget" ]; then
+		[ ! -e "$gadget/UDC" ] ||
+			write_attr "$gadget/UDC" '' >/dev/null 2>&1 || failed=1
+		[ ! -e "$gadget/functions/mass_storage.0/lun.0/file" ] ||
+			write_attr "$gadget/functions/mass_storage.0/lun.0/file" '' \
+				>/dev/null 2>&1 || failed=1
+		if [ "$testing" = 1 ]; then
+			case "$gadget" in
+				"${GKD_RECOVERY_USB_TEST_ROOT:?}"/*) rm -rf -- "$gadget" ;;
+				*) failed=1 ;;
+			esac
+		else
+			rm -f "$gadget/os_desc/c.1" \
+				"$gadget/configs/c.1/rndis.usb0" \
+				"$gadget/configs/c.1/mass_storage.0" 2>/dev/null || failed=1
+			rmdir "$gadget/functions/mass_storage.0" \
+				"$gadget/functions/rndis.usb0" 2>/dev/null || true
+			rmdir "$gadget/configs/c.1/strings/0x409" \
+				"$gadget/configs/c.1" "$gadget/strings/0x409" \
+				"$gadget" 2>/dev/null || failed=1
+		fi
+	fi
+	[ "$failed" = 0 ] && [ ! -e "$gadget" ]
+}
+
+fail()
+{
+	reason=$1
+	teardown >/dev/null 2>&1 || true
+	printf 'GKD_RECOVERY_USB=BLOCKED reason=%s\n' "$reason" >&2
+	exit 1
+}
+
+blocked()
+{
+	printf 'GKD_RECOVERY_USB=BLOCKED reason=%s\n' "$1" >&2
+	exit 1
+}
+
+ensure_configfs()
+{
+	if [ "$testing" = 1 ]; then
+		mkdir -p "$configfs/usb_gadget"
+	else
+		mkdir -p "$configfs"
+		grep -q " $configfs configfs " /proc/mounts ||
+			mount -t configfs none "$configfs"
+	fi
+	[ -d "$configfs/usb_gadget" ]
+}
+
+foreign_gadget()
+{
+	for candidate in "$configfs"/usb_gadget/*; do
+		[ -e "$candidate" ] || continue
+		[ "$candidate" = "$gadget" ] || return 0
+	done
+	return 1
+}
+
+udc_name()
+{
+	found=
+	count=0
+	for candidate in "$udc_root"/*; do
+		[ -e "$candidate" ] || continue
+		found=${candidate##*/}
+		count=$((count + 1))
+	done
+	[ "$count" = 1 ] || return 1
+	printf '%s\n' "$found"
+}
+
+make_common()
+{
+	[ ! -e "$gadget" ] && mkdir "$gadget" || return 1
+	if [ "$testing" = 1 ]; then
+		mkdir -p "$gadget/os_desc" "$gadget/functions"
+	fi
+	write_attr "$gadget/idVendor" 0x0525 || return 1
+	write_attr "$gadget/idProduct" 0xa4a2 || return 1
+	write_attr "$gadget/bDeviceClass" 0xef || return 1
+	write_attr "$gadget/bDeviceSubClass" 0x02 || return 1
+	write_attr "$gadget/bDeviceProtocol" 0x01 || return 1
+	mkdir -p "$gadget/strings/0x409" "$gadget/configs/c.1/strings/0x409" ||
+		return 1
+	# Match the already working A USB identity and Microsoft RNDIS descriptors.
+	write_attr "$gadget/strings/0x409/serialnumber" GKDROUND64R5 || return 1
+	write_attr "$gadget/strings/0x409/manufacturer" 'GKD Mini' || return 1
+	write_attr "$gadget/strings/0x409/product" 'GKD Mini Recovery' || return 1
+	write_attr "$gadget/configs/c.1/strings/0x409/configuration" Recovery ||
+		return 1
+	write_attr "$gadget/configs/c.1/MaxPower" 120 || return 1
+	mkdir "$gadget/functions/rndis.usb0" || return 1
+	# Function IAD identity, distinct from the composite device EF/02/01.
+	# Matches the working A instance and Windows' built-in rndiscmp.inf.
+	# This kernel parses these U8 attributes with %02hhx, not base-0 integers.
+	write_attr "$gadget/functions/rndis.usb0/class" ef || return 1
+	write_attr "$gadget/functions/rndis.usb0/subclass" 04 || return 1
+	write_attr "$gadget/functions/rndis.usb0/protocol" 01 || return 1
+	[ "$(cat "$gadget/functions/rndis.usb0/class")" = ef ] || return 1
+	[ "$(cat "$gadget/functions/rndis.usb0/subclass")" = 04 ] || return 1
+	[ "$(cat "$gadget/functions/rndis.usb0/protocol")" = 01 ] || return 1
+	write_attr "$gadget/functions/rndis.usb0/os_desc/interface.rndis/compatible_id" RNDIS || return 1
+	write_attr "$gadget/functions/rndis.usb0/os_desc/interface.rndis/sub_compatible_id" 5162001 || return 1
+	write_attr "$gadget/functions/rndis.usb0/dev_addr" 02:00:00:00:64:01 ||
+		return 1
+	write_attr "$gadget/functions/rndis.usb0/host_addr" 02:00:00:00:64:02 ||
+		return 1
+	ln -s "$gadget/functions/rndis.usb0" \
+		"$gadget/configs/c.1/rndis.usb0" || return 1
+	write_attr "$gadget/os_desc/use" 1 || return 1
+	write_attr "$gadget/os_desc/b_vendor_code" 0xcd || return 1
+	write_attr "$gadget/os_desc/qw_sign" MSFT100 || return 1
+	ln -s "$gadget/configs/c.1" "$gadget/os_desc/c.1" || return 1
+}
+
+add_system_lun()
+{
+	mkdir "$gadget/functions/mass_storage.0" || return 1
+	if [ "$testing" = 1 ]; then
+		mkdir -p "$gadget/functions/mass_storage.0/lun.0"
+	fi
+	write_attr "$gadget/functions/mass_storage.0/lun.0/ro" 0 || return 1
+	write_attr "$gadget/functions/mass_storage.0/lun.0/removable" 1 || return 1
+	write_attr "$gadget/functions/mass_storage.0/lun.0/nofua" 0 || return 1
+	write_attr "$gadget/functions/mass_storage.0/lun.0/file" "$device" ||
+		return 1
+	ln -s "$gadget/functions/mass_storage.0" \
+		"$gadget/configs/c.1/mass_storage.0" || return 1
+}
+
+mounted_locally()
+{
+	awk -v d="$device" '$1 == d || index($1, d "p") == 1 {found=1}
+		END {exit !found}' "$mounts"
+}
+
+bind_and_start_ssh()
+{
+	udc=$(udc_name) || return 1
+	write_attr "$gadget/UDC" "$udc" || return 1
+	ssh_control start || return 1
+}
+
+start_mode()
+{
+	mode=$1
+	if [ "$testing" = 1 ]; then [ -e "$device" ] || return 1
+	else [ -b "$device" ] || return 1
+	fi
+	teardown || return 1
+	ensure_configfs && ! foreign_gadget && make_common || return 1
+	[ "$mode" = network ] || add_system_lun || return 1
+	if ! bind_and_start_ssh; then
+		teardown >/dev/null 2>&1 || true
+		return 1
+	fi
+	return 0
+}
+
+network_start()
+{
+	start_mode network || fail network-start
+	printf '%s\n' 'GKD_RECOVERY_USB=PASS mode=network ssh=10.1.1.2 lun=none'
+}
+
+export_start()
+{
+	mounted_locally && blocked system-card-mounted
+	if ! start_mode export; then
+		start_mode network >/dev/null 2>&1 || true
+		blocked export-start
+	fi
+	printf '%s\n' \
+		'GKD_RECOVERY_USB=PASS mode=debug ssh=10.1.1.2 card=/dev/mmcblk0'
+}
+
+export_stop()
+{
+	teardown || fail export-stop
+	if [ "$testing" != 1 ]; then
+		sync
+		blockdev --flushbufs "$device" || fail system-card-flush
+	fi
+	start_mode network || fail network-restore
+	printf '%s\n' 'GKD_RECOVERY_USB=PASS mode=network ssh=10.1.1.2 lun=none'
+}
+
+stop_all()
+{
+	teardown || fail stop
+	if [ "$testing" != 1 ]; then
+		sync
+		blockdev --flushbufs "$device" || fail flush
+	fi
+	printf '%s\n' 'GKD_RECOVERY_USB=PASS mode=stopped'
+}
+
+status()
+{
+	if [ -r "$gadget/functions/mass_storage.0/lun.0/file" ] &&
+	   [ "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" = "$device" ]; then
+		printf '%s\n' 'GKD_RECOVERY_USB=ACTIVE mode=debug ssh=10.1.1.2 card=/dev/mmcblk0'
+	elif [ -L "$gadget/configs/c.1/rndis.usb0" ]; then
+		printf '%s\n' 'GKD_RECOVERY_USB=ACTIVE mode=network ssh=10.1.1.2 lun=none'
+	else
+		printf '%s\n' 'GKD_RECOVERY_USB=INACTIVE'
+	fi
+}
+
+[ "$#" = 1 ] || {
+	echo 'usage: gkd-recovery-usb network-start|export-start|export-stop|stop|status' >&2
+	exit 64
+}
+if [ "$1" != status ]; then
+	lock_root=/run/gkd-recovery
+	[ "$testing" != 1 ] || lock_root=${GKD_RECOVERY_USB_TEST_ROOT:?}/operations
+	mkdir -p "$lock_root" || blocked operation-lock
+	mkdir "$lock_root/card-operation.lock" 2>/dev/null || blocked operation-busy
+	trap 'rmdir "$lock_root/card-operation.lock"' EXIT
+	trap 'exit 1' HUP INT TERM
+fi
+case "$1" in
+	network-start) network_start ;;
+	export-start) export_start ;;
+	export-stop) export_stop ;;
+	stop) stop_all ;;
+	status) status ;;
+	*) echo 'usage: gkd-recovery-usb network-start|export-start|export-stop|stop|status' >&2; exit 64 ;;
+esac

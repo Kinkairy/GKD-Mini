@@ -1,0 +1,67 @@
+{
+  "p1_regular_files": [
+    {
+      "bytes": 14672,
+      "destination": "/usr/sbin/gkd-battery-notify",
+      "destination_mode": "0555",
+      "gid": 0,
+      "sha256": "8a42ade6d03828757f6353fcda19f579710eb39aac9b0a800485eb8ab4479933",
+      "source": "/usr/sbin/gkd-battery-notify",
+      "source_mode": "0755",
+      "uid": 0
+    },
+    {
+      "bytes": 92152,
+      "destination": "/usr/lib/libz.so.1.2.11",
+      "destination_mode": "0555",
+      "gid": 0,
+      "sha256": "5a299afa62d54488af1f5a43d1a4f186f7f862441036688413f159623d1fcc49",
+      "source": "/usr/lib/libz.so.1.2.11",
+      "source_mode": "0755",
+      "uid": 0
+    },
+    {
+      "bytes": 240628,
+      "destination": "/usr/lib/gkd-uinput.ko",
+      "destination_mode": "0644",
+      "gid": 0,
+      "sha256": "64260225444c49f9940918a4ca49e83aa47bfa2f0315626fbb3324abc61bad51",
+      "source": "/usr/lib/gkd-uinput.ko",
+      "source_mode": "0644",
+      "uid": 0
+    },
+    {
+      "bytes": 147636,
+      "destination": "/usr/bin/kmod",
+      "destination_mode": "0555",
+      "gid": 0,
+      "sha256": "3316eda58f803e5c1eda728efc93bbd612c832d843ced81c709871dc44f61660",
+      "source": "/usr/bin/kmod",
+      "source_mode": "0755",
+      "uid": 0
+    }
+  ],
+  "p1_symlinks": [
+    {
+      "destination": "/usr/lib/libz.so.1",
+      "source": "/usr/lib/libz.so.1",
+      "source_required": true,
+      "target": "libz.so.1.2.11",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/usleep",
+      "source": "/bin/usleep",
+      "source_required": true,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/sbin/insmod",
+      "source": "/sbin/insmod",
+      "source_required": true,
+      "target": "../usr/bin/kmod",
+      "type": "symlink"
+    }
+  ]
+}

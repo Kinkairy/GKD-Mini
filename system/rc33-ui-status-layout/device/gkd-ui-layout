@@ -1,0 +1,42 @@
+#!/bin/sh
+set -u
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+ui=${GKD_UI_LAYOUT_SYSFS:-/sys/class/graphics/fb0/gkd_usb_menu}
+GKD_CONFIG_FILE=${GKD_UI_LAYOUT_CONFIG:-${GKD_CONFIG_FILE:-}}
+export GKD_CONFIG_FILE
+config_lib=${GKD_CONFIG_LIB:-/usr/lib/gkd-mini/config.sh}
+[ -f "$config_lib" ] && [ ! -L "$config_lib" ] || exit 68
+. "$config_lib"
+
+load_layout()
+{
+	gkd_config_select || return 1
+	text_x=$(gkd_config_uint ui_status_text_x 34 8 50) || return 1
+	text_y=$(gkd_config_uint ui_status_text_y 211 206 218) || return 1
+	icon_x=$(gkd_config_uint ui_status_icon_x 15 8 97) || return 1
+	icon_y=$(gkd_config_uint ui_status_icon_y 210 206 223) || return 1
+	icon_width=$(gkd_config_uint ui_status_icon_width 13 5 24) || return 1
+	icon_height=$(gkd_config_uint ui_status_icon_height 11 5 18) || return 1
+	[ $((icon_x + icon_width)) -le 102 ] || return 1
+	[ $((icon_y + icon_height)) -le 228 ] || return 1
+}
+
+case "${1:-status}" in
+apply)
+	load_layout || exit 65
+	[ -w "$ui" ] || exit 66
+	printf 'layout %s %s %s %s %s %s\n' \
+		"$text_x" "$text_y" "$icon_x" "$icon_y" \
+		"$icon_width" "$icon_height" >"$ui" || exit 67
+	;;
+status)
+	load_layout || exit 65
+	printf 'GKD_UI_LAYOUT=text:%s,%s icon:%s,%s,%sx%s\n' \
+		"$text_x" "$text_y" "$icon_x" "$icon_y" \
+		"$icon_width" "$icon_height"
+	;;
+*) exit 64 ;;
+esac

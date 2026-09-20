@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RUNTIME=/opt/gkd-build/artifacts/gkd-mini-system-rebuild/tooling/squashfs-tools/runtime-rocky9-x86_64-4.4-10.git1.el9
+[[ -d $RUNTIME && ! -L $RUNTIME && $(realpath -e -- "$RUNTIME") == "$RUNTIME" ]]
+printf '%s  %s\n' \
+    ad96200950148efb34358c6e980e06b15a807644ce0a003e1d8a71f9f0820fcd \
+    "$RUNTIME/lib64/ld-linux-x86-64.so.2" \
+    842c14dec4b4f289472f0c1526be82bda4acee3efdc60e160c5a29bf7971f42a \
+    "$RUNTIME/bin/mksquashfs" |
+    sha256sum -c - >/dev/null
+exec "$RUNTIME/lib64/ld-linux-x86-64.so.2" \
+    --library-path "$RUNTIME/lib64" "$RUNTIME/bin/mksquashfs" "$@"

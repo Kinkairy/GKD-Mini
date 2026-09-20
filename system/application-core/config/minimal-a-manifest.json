@@ -1,0 +1,139 @@
+{
+  "format": 1,
+  "source_r": "1fbf203de7cfa0d62cda56d735314e451c25d44a",
+  "source_a": "ea9681d8afb44a65dde4fb7a116999c350bd12c4",
+  "opk_path": "/media/data/apps/SimpleMenu-OD-v1.1.opk",
+  "opk_sha256": "5017c77c4cd10fc4daf6c26cfe434f91bf53bb76bc33ce4f22bd3a93a626833b",
+  "sm_sha256": "e4373a1d0ebe4e4474b5b9aa4a753425eb3ec106e05c38b870a5e726608a17e8",
+  "dependencies": [
+    {
+      "path": "/lib/ld-uClibc.so.0",
+      "resolved": "/lib/ld-uClibc-0.9.33.2.so",
+      "sha256": "2245a1dc4380b87e9a6cf0ad031fa940ec04a476b7c06659dd1838f50ef8413a"
+    },
+    {
+      "path": "/lib/libc.so.0",
+      "resolved": "/lib/libuClibc-0.9.33.2.so",
+      "sha256": "acfc0f346d4b3878d4a1c009b61132a154a1af342e80ca7cdce334463aaaf4ce"
+    },
+    {
+      "path": "/lib/libdl.so.0",
+      "resolved": "/lib/libdl-0.9.33.2.so",
+      "sha256": "c13bef77465482686957aba16e4ccf69b31e09d38f9f8a4fe7646ff1ae411853"
+    },
+    {
+      "path": "/lib/libgcc_s.so.1",
+      "resolved": "/lib/libgcc_s.so.1",
+      "sha256": "16e60355c6919a9cb88e41026a12da54dc7251ccd786f4f595c67167cd6426aa"
+    },
+    {
+      "path": "/lib/libm.so.0",
+      "resolved": "/lib/libm-0.9.33.2.so",
+      "sha256": "a02e212394b6c3f42e3fd3acd2e362ca06d20f308f5cbed95f392c10dd317056"
+    },
+    {
+      "path": "/lib/libpthread.so.0",
+      "resolved": "/lib/libpthread-0.9.33.2.so",
+      "sha256": "9ce74be1ff8d86f96d166dae7d5c60e72db62980c94cbbe9cd28955b77430881"
+    },
+    {
+      "path": "/usr/lib/libFLAC.so.8",
+      "resolved": "/usr/lib/libFLAC.so.8.3.0",
+      "sha256": "64df59c61648eeb289c6a18447d5f2b134143ac373ec6f26f1ba04d22c1e4f19"
+    },
+    {
+      "path": "/usr/lib/libSDL-1.2.so.0",
+      "resolved": "/usr/lib/libSDL-1.2.so.0.11.4",
+      "sha256": "6f47d60d5ab02c08f4f4a57b898297259dd2a94328cd024e3ff59374f7263eeb"
+    },
+    {
+      "path": "/usr/lib/libSDL_image-1.2.so.0",
+      "resolved": "/usr/lib/libSDL_image-1.2.so.0.8.5",
+      "sha256": "ef27e63937cfed7ea645b3a33f077537de6d48bf61e56b2226065c83161bb480"
+    },
+    {
+      "path": "/usr/lib/libSDL_sound-1.0.so.1",
+      "resolved": "/usr/lib/libSDL_sound-1.0.so.1.0.2",
+      "sha256": "faaee18d034f0c6479d35682594ad5b90076ef068a4f97efc62eb6f4d9639393"
+    },
+    {
+      "path": "/usr/lib/libSDL_ttf-2.0.so.0",
+      "resolved": "/usr/lib/libSDL_ttf-2.0.so.0.10.1",
+      "sha256": "a79f378148b84ac7aa9ff51ab6184b26dc9fab4bb001483ce0568c339961281d"
+    },
+    {
+      "path": "/usr/lib/libbz2.so.1.0",
+      "resolved": "/usr/lib/libbz2.so.1.0.6",
+      "sha256": "0d93618c6033aa72242c293f34ffd847bb474fddc78f2fef89cc82507e7100f3"
+    },
+    {
+      "path": "/usr/lib/libfreetype.so.6",
+      "resolved": "/usr/lib/libfreetype.so.6.17.1",
+      "sha256": "2d6bfda3119674ac9c4bd1976f0b3afac950588e8ab24bd1a54d0fef28a943bd"
+    },
+    {
+      "path": "/usr/lib/libini.so.0",
+      "resolved": "/usr/lib/libini.so.0.1",
+      "sha256": "8bce8eb89a4e4d25839e287041f42137969b49ffc6e566d42bb3695de824695b"
+    },
+    {
+      "path": "/usr/lib/libmikmod.so.3",
+      "resolved": "/usr/lib/libmikmod.so.3.3.0",
+      "sha256": "6ac2c5294926623db73c28883ac4cf86d9cadfc03503924869ca91d39ec4da83"
+    },
+    {
+      "path": "/usr/lib/libmodplug.so.1",
+      "resolved": "/usr/lib/libmodplug.so.1.0.0",
+      "sha256": "58711caff6c513f34d8b85deb84342a158aeedadbb5da4ae1fbc7c72f90af06f"
+    },
+    {
+      "path": "/usr/lib/libogg.so.0",
+      "resolved": "/usr/lib/libogg.so.0.8.1",
+      "sha256": "04e381bb52fd513698ef5b6944e9720dc3c565b7ed434b2d1c87c3ce6a653bde"
+    },
+    {
+      "path": "/usr/lib/libopk.so.1",
+      "resolved": "/usr/lib/libopk.so.1.0",
+      "sha256": "462ef63a592e7438d64dd678fb8012f0c77ec1d92e44c740dfea2473a0335f9d"
+    },
+    {
+      "path": "/usr/lib/libpng14.so.14",
+      "resolved": "/usr/lib/libpng14.so.14.22.0",
+      "sha256": "e5ee8c2f26c8b28e12c20625b26a9a006dbb125b29382c674035613f41cea0ca"
+    },
+    {
+      "path": "/usr/lib/libspeex.so.1",
+      "resolved": "/usr/lib/libspeex.so.1.5.0",
+      "sha256": "a3dd452695e492ab0e5deafe0d3123e8baf3d21572dd9aad6f820a752dabd0a7"
+    },
+    {
+      "path": "/usr/lib/libstdc++.so.6",
+      "resolved": "/usr/lib/libstdc++.so.6.0.21",
+      "sha256": "9567f9ba0502ee6cefc7989ffe20952930de57b8f723991f604a77abf3226275"
+    },
+    {
+      "path": "/usr/lib/libts-1.0.so.0",
+      "resolved": "/usr/lib/libts-1.0.so.0.0.0",
+      "sha256": "002cedad51cd672f02b6097902c42cdd247861b464080149e34734a39f867b4b"
+    },
+    {
+      "path": "/usr/lib/libvorbis.so.0",
+      "resolved": "/usr/lib/libvorbis.so.0.4.7",
+      "sha256": "4e044d2f4dd564020ea51d039a0ba329895a8ff5b79239560abe9f1e3617d32b"
+    },
+    {
+      "path": "/usr/lib/libvorbisfile.so.3",
+      "resolved": "/usr/lib/libvorbisfile.so.3.3.6",
+      "sha256": "e1916c493c5419d6eecae8c49cdc80a548777a4a8e5f9139a2023a7822927824"
+    },
+    {
+      "path": "/usr/lib/libz.so.1",
+      "resolved": "/usr/lib/libz.so.1.2.11",
+      "sha256": "5a299afa62d54488af1f5a43d1a4f186f7f862441036688413f159623d1fcc49"
+    }
+  ],
+  "boot_animation": {
+    "path": "/boot/gkd-mini/startup-animation.rgb565",
+    "sha256": "4dc15fb5c2a81841a6dfac492ec4e4b587e8c4b8b96d5cc76106c8a08ddb73a5"
+  }
+}

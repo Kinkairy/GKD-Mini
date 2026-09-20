@@ -1,0 +1,47 @@
+#!/bin/sh
+
+service=/usr/sbin/gkd-usb-internet-auto
+pidfile=/run/gkd-usb-internet-auto/supervisor.pid
+
+alive()
+{
+	[ -s "$pidfile" ] || return 1
+	IFS=' ' read -r pid start <"$pidfile" || return 1
+	case "$pid:$start" in *[!0-9:]*|:*) return 1 ;; esac
+	[ "$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)" = "$start" ] || return 1
+	cmd=$(tr '\000' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+	case "$cmd" in *"$service daemon"*) return 0 ;; *) return 1 ;; esac
+}
+
+case "${1:-}" in
+start)
+	alive && exit 0
+	rm -f -- "$pidfile"
+	"$service" cleanup >/dev/null 2>&1 || true
+	mkdir -p /run/gkd-usb-internet-auto || exit 0
+	chmod 0700 /run/gkd-usb-internet-auto
+	"$service" daemon >/dev/null 2>&1 & pid=$!
+	start=$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)
+	case "$start" in ''|*[!0-9]*) kill "$pid" 2>/dev/null || true; exit 0 ;; esac
+	printf '%s %s\n' "$pid" "$start" >"$pidfile"
+	chmod 0600 "$pidfile"
+	;;
+stop)
+	if alive; then
+		kill "$pid" 2>/dev/null || true
+		waits=0
+		while alive && [ "$waits" -lt 5 ]; do
+			sleep 1
+			waits=$((waits + 1))
+		done
+		alive && kill -9 "$pid" 2>/dev/null || true
+	fi
+	rm -f -- "$pidfile"
+	"$service" cleanup >/dev/null 2>&1 || true
+	;;
+restart) "$0" stop; "$0" start ;;
+status) alive ;;
+*) exit 0 ;;
+esac
+
+exit 0

@@ -1,0 +1,365 @@
+#!/bin/sh
+# A-native boot and trial-good orchestration for the accepted update leaves.
+set -eu
+umask 077
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+testing=${GKD_APPLICATION_UPDATE_TESTING-0}
+disk=/dev/mmcblk0
+recovery=/dev/mmcblk0p3
+p1=/dev/mmcblk0p1
+game_device=/dev/mmcblk1p1
+game_mount=/media/sdcard
+runtime_file=/etc/gkd-mini/runtime-id
+state_root=/run/gkd-application
+operation_root=/run/gkd-recovery
+lun_file=/sys/kernel/config/usb_gadget/gkd_recovery/functions/mass_storage.0/lun.0/file
+guard=/usr/sbin/gkd-app-card-guard
+request_tool=/usr/sbin/gkd-update-request-tool
+engine=/usr/sbin/gkd-update-engine
+coordinator=/usr/sbin/gkd-update-coordinator
+mount_tool=/bin/mount
+umount_tool=/bin/umount
+owner=0
+[ "$testing" != 1 ] || {
+	disk=${GKD_APPLICATION_UPDATE_TEST_DISK:?}
+	recovery=${GKD_APPLICATION_UPDATE_TEST_RECOVERY:?}
+	p1=${GKD_APPLICATION_UPDATE_TEST_P1:?}
+	game_device=${GKD_APPLICATION_UPDATE_TEST_GAME_DEVICE:?}
+	game_mount=${GKD_APPLICATION_UPDATE_TEST_GAME_MOUNT:?}
+	runtime_file=${GKD_APPLICATION_UPDATE_TEST_RUNTIME_ID:?}
+	state_root=${GKD_APPLICATION_UPDATE_TEST_STATE_ROOT:?}
+	operation_root=${GKD_APPLICATION_UPDATE_TEST_OPERATION_ROOT:?}
+	lun_file=${GKD_APPLICATION_UPDATE_TEST_LUN_FILE:?}
+	guard=${GKD_APPLICATION_UPDATE_TEST_GUARD:?}
+	request_tool=${GKD_APPLICATION_UPDATE_TEST_REQUEST_TOOL:?}
+	engine=${GKD_APPLICATION_UPDATE_TEST_ENGINE:?}
+	coordinator=${GKD_APPLICATION_UPDATE_TEST_COORDINATOR:?}
+	mount_tool=${GKD_APPLICATION_UPDATE_TEST_MOUNT:?}
+	umount_tool=${GKD_APPLICATION_UPDATE_TEST_UMOUNT:?}
+	owner=$(id -u)
+}
+trial_marker=$state_root/update-trial
+capture_file=$state_root/.update-capture.$$
+swap_file=$state_root/.update-swap.$$
+lock=$operation_root/card-operation.lock
+mounted=0
+
+blocked()
+{
+	printf 'GKD_APPLICATION_UPDATE=BLOCKED reason=%s\n' "$1" >&2
+	exit 1
+}
+
+cleanup()
+{
+	exec 3<&- 2>/dev/null || true
+	if [ "$mounted" = 1 ]; then
+		"$umount_tool" "$game_mount" >/dev/null 2>&1 || true
+	fi
+	rm -f "$capture_file" "$swap_file"
+	rmdir "$lock" 2>/dev/null || true
+}
+
+secure_dir()
+{
+	mkdir -p "$1" || return 1
+	[ -d "$1" ] && [ ! -L "$1" ] &&
+	[ "$(stat -c %u "$1")" = "$owner" ] || return 1
+	mode=$(stat -c %a "$1") || return 1
+	case "$mode" in *[!0-7]*|'') return 1 ;; esac
+	[ $((0$mode & 022)) -eq 0 ]
+}
+
+take_lock()
+{
+	secure_dir "$state_root" && secure_dir "$operation_root" ||
+		blocked unsafe-state-directory
+	mkdir "$lock" 2>/dev/null || blocked operation-busy
+	trap cleanup EXIT
+	trap 'exit 1' HUP INT TERM
+}
+
+capture()
+{
+	: >"$capture_file"
+	set +e
+	"$@" >"$capture_file"
+	capture_status=$?
+	set -e
+	cat "$capture_file" >&2
+}
+
+valid_hex()
+{
+	[ "${#1}" -eq 64 ] || return 1
+	case "$1" in *[!0-9a-f]*) return 1 ;; esac
+}
+
+read_runtime()
+{
+	[ -f "$runtime_file" ] && [ ! -L "$runtime_file" ] &&
+	[ "$(stat -c %u:%a "$runtime_file")" = "$owner:444" ] || return 1
+	runtime_id=$(cat "$runtime_file") || return 1
+	valid_hex "$runtime_id"
+}
+
+request_show()
+{
+	capture "$request_tool" show "$disk"
+	request_status=$capture_status
+	[ "$request_status" -eq 0 ] || return 0
+	[ "$(wc -l <"$capture_file")" -eq 8 ] || return 1
+	for key in package_sha256 source_runtime_id target_runtime_id package_bytes 		p1_payload_offset p1_payload_bytes kernel_payload_offset kernel_payload_bytes
+	do
+		[ "$(grep -c "^$key=" "$capture_file")" -eq 1 ] || return 1
+	done
+	request_package=$(sed -n 's/^package_sha256=//p' "$capture_file")
+	request_source=$(sed -n 's/^source_runtime_id=//p' "$capture_file")
+	request_target=$(sed -n 's/^target_runtime_id=//p' "$capture_file")
+	valid_hex "$request_package" && valid_hex "$request_source" &&
+		valid_hex "$request_target" || return 1
+	for key in package_bytes p1_payload_offset p1_payload_bytes 		kernel_payload_offset kernel_payload_bytes
+	do
+		value=$(sed -n "s/^$key=//p" "$capture_file")
+		case "$value" in ''|*[!0-9]*) return 1 ;; esac
+	done
+}
+
+journal_inspect()
+{
+	capture "$engine" inspect "$recovery"
+	journal_status=$capture_status
+	[ "$journal_status" -eq 0 ] || return 0
+	[ "$(wc -l <"$capture_file")" -eq 1 ] || return 1
+	journal_state=$(sed -n 's/^GKDSU_INSPECT=PASS sequence=[1-9][0-9]* state=\([1-9]\) package=[0-9a-f][0-9a-f]*$/\1/p' "$capture_file")
+	journal_package=$(sed -n 's/^GKDSU_INSPECT=PASS sequence=[1-9][0-9]* state=[1-9] package=\([0-9a-f][0-9a-f]*\)$/\1/p' "$capture_file")
+	[ -n "$journal_state" ] && valid_hex "$journal_package"
+}
+
+range_hash()
+{
+	hash=$(dd if="$swap_file" bs=1 skip="$1" count="$2" 2>/dev/null |
+		sha256sum) || return 1
+	range_hash_value=${hash%% *}
+}
+
+normal_swap()
+{
+	# Accept both the stage-1 mkswap header (UUID + GKD-SWAP label) and the
+	# accepted engine's deterministic format-swap header. All bytes outside
+	# those mkswap metadata fields must retain the exact clean layout, and the
+	# second journal copy must be zero.
+	dd if="$recovery" of="$swap_file" bs=8192 count=1 2>/dev/null || return 1
+	[ "$(wc -c <"$swap_file")" -eq 8192 ] || return 1
+	range_hash 0 1024 &&
+		[ "$range_hash_value" = 5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef ] ||
+		return 1
+	range_hash 1024 12 &&
+		[ "$range_hash_value" = f128380dea7f568df2edeb74f23aea99498ea3e40f5b0ebad3c83f9d640c633b ] ||
+		return 1
+	range_hash 1052 16
+	case "$range_hash_value" in
+		8ee37f8cb4ee7808070f9aada7a2c6111b782f4dbc64c81c117879468193cbf1|374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb) ;;
+		*) return 1 ;;
+	esac
+	range_hash 1068 3018 &&
+		[ "$range_hash_value" = 1c36d6033bf5dc378c31e3f25af3ddcffbb30eda6abbf6aca9943a7be1db316c ] ||
+		return 1
+	[ "$(dd if="$swap_file" bs=1 skip=4086 count=10 2>/dev/null)" = SWAPSPACE2 ] ||
+		return 1
+	range_hash 4096 4096 &&
+		[ "$range_hash_value" = ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7 ]
+}
+
+guard_system_card()
+{
+	capture "$guard" mmcblk0
+	[ "$capture_status" -eq 0 ]
+}
+
+guard_trial_finalize()
+{
+	capture "$guard" mmcblk0p3
+	[ "$capture_status" -eq 0 ] || return 1
+	[ -r "$lun_file" ] && [ ! -L "$lun_file" ] || return 1
+	lun=$(cat "$lun_file") || return 1
+	[ -z "$lun" ]
+}
+
+mount_package()
+{
+	mkdir -p "$game_mount" || return 1
+	[ -d "$game_mount" ] && [ ! -L "$game_mount" ] || return 1
+	"$mount_tool" -t vfat -o ro,nosuid,nodev,noexec,utf8 \
+		"$game_device" "$game_mount" >&2 || return 1
+	mounted=1
+	exec 3<"$game_mount" || return 1
+	package_path=/proc/self/fd/3/gkd-update/system.gkdupdate
+	[ -f "$package_path" ] && [ ! -L "$package_path" ]
+}
+
+unmount_package()
+{
+	exec 3<&-
+	"$umount_tool" "$game_mount" >&2 || return 1
+	mounted=0
+}
+
+run_coordinator()
+{
+	capture "$coordinator" "$1" "$recovery" "$p1" "$disk" "$engine"
+	coordinator_status=$capture_status
+}
+
+create_trial_marker()
+{
+	[ ! -e "$trial_marker" ] && [ ! -L "$trial_marker" ] || return 1
+	(
+		set -C
+		printf 'package_sha256=%s\ntarget_runtime_id=%s\n' \
+			"$request_package" "$request_target" >"$trial_marker"
+	) || return 1
+	chmod 0600 "$trial_marker" || return 1
+	[ -f "$trial_marker" ] && [ ! -L "$trial_marker" ] &&
+	[ "$(stat -c %u:%a "$trial_marker")" = "$owner:600" ]
+}
+
+read_trial_marker()
+{
+	[ -f "$trial_marker" ] && [ ! -L "$trial_marker" ] &&
+	[ "$(stat -c %u:%a "$trial_marker")" = "$owner:600" ] || return 1
+	[ "$(wc -l <"$trial_marker")" -eq 2 ] || return 1
+	marker_package=$(sed -n 's/^package_sha256=//p' "$trial_marker")
+	marker_target=$(sed -n 's/^target_runtime_id=//p' "$trial_marker")
+	[ "$(grep -c '^package_sha256=' "$trial_marker")" -eq 1 ] &&
+	[ "$(grep -c '^target_runtime_id=' "$trial_marker")" -eq 1 ] &&
+	valid_hex "$marker_package" && valid_hex "$marker_target"
+}
+
+boot()
+{
+	[ "$testing" = 1 ] || [ "$(id -u)" = 0 ] || blocked owner-not-root
+	take_lock
+	guard_system_card || blocked system-card-busy-or-unreadable
+	request_show || blocked request-output
+	case "$request_status" in
+		3)
+			journal_inspect || blocked journal-output
+			case "$journal_status" in
+				0) blocked journal-without-request ;;
+				1) ;;
+				*) blocked journal-tool ;;
+			esac
+			normal_swap || blocked corrupt-idle-state
+			printf '%s\n' 'GKD_APPLICATION_UPDATE=BOOT outcome=normal'
+			return 0
+			;;
+		0) ;;
+		*) blocked invalid-request ;;
+	esac
+	journal_inspect || blocked journal-output
+	case "$journal_status" in 0|1) ;; *) blocked journal-tool ;; esac
+	need_package=0
+	if [ "$journal_status" -eq 0 ]; then
+		[ "$journal_package" = "$request_package" ] ||
+			blocked transaction-binding
+		case "$journal_state" in
+			1|2) need_package=1 ;;
+			3|4|5|6|7|8|9) ;;
+			*) blocked journal-state ;;
+		esac
+	else
+		normal_swap || blocked corrupt-update-state
+		need_package=1
+	fi
+	package_path=$state_root/no-package-required
+	if [ "$need_package" = 1 ]; then
+		mount_package || blocked package-mount-or-missing
+	fi
+	run_coordinator "$package_path"
+	if [ "$need_package" = 1 ]; then
+		unmount_package || blocked package-unmount
+	fi
+	case "$coordinator_status" in
+		0)
+			trial_package=$request_package
+			trial_target=$request_target
+			request_show || blocked request-output
+			[ "$request_status" -eq 0 ] &&
+			[ "$request_package" = "$trial_package" ] &&
+			[ "$request_target" = "$trial_target" ] ||
+				blocked trial-request-readback
+			read_runtime || blocked runtime-id
+			[ "$runtime_id" = "$request_target" ] || blocked target-runtime-mismatch
+			journal_inspect || blocked journal-output
+			[ "$journal_status" -eq 0 ] && [ "$journal_state" = 9 ] &&
+			[ "$journal_package" = "$request_package" ] ||
+				blocked trial-readback
+			create_trial_marker || blocked trial-marker
+			printf 'GKD_APPLICATION_UPDATE=BOOT outcome=trial target=%s\n' "$request_target"
+			return 0
+			;;
+		10)
+			printf '%s\n' 'GKD_APPLICATION_UPDATE=BOOT outcome=reboot coordinator=10'
+			return 10
+			;;
+		20)
+			printf '%s\n' 'GKD_APPLICATION_UPDATE=BOOT outcome=reboot coordinator=20'
+			return 20
+			;;
+		*) blocked coordinator ;;
+	esac
+}
+
+mark_good()
+{
+	[ "$testing" = 1 ] || [ "$(id -u)" = 0 ] || blocked owner-not-root
+	take_lock
+	guard_trial_finalize || blocked trial-media-busy-or-exported
+	read_trial_marker || blocked trial-marker
+	request_show || blocked request-output
+	[ "$request_status" -eq 0 ] || blocked request-missing
+	read_runtime || blocked runtime-id
+	[ "$marker_package" = "$request_package" ] &&
+	[ "$marker_target" = "$request_target" ] &&
+	[ "$runtime_id" = "$request_target" ] ||
+		blocked trial-binding
+	journal_inspect || blocked journal-output
+	[ "$journal_status" -eq 0 ] &&
+	[ "$journal_package" = "$request_package" ] ||
+		blocked trial-state
+	case "$journal_state" in
+		9)
+			capture "$engine" trial-good "$recovery" "$p1" "$disk"
+			[ "$capture_status" -eq 0 ] || blocked trial-good
+			journal_inspect || blocked journal-output
+			[ "$journal_status" -eq 0 ] && [ "$journal_state" = 7 ] &&
+			[ "$journal_package" = "$request_package" ] ||
+				blocked trial-good-readback
+			;;
+		7) ;;
+		*) blocked trial-state ;;
+	esac
+	run_coordinator "$state_root/no-package-required"
+	[ "$coordinator_status" -eq 20 ] || blocked finalize
+	request_show || blocked request-output
+	[ "$request_status" -eq 3 ] || blocked request-clear-readback
+	journal_inspect || blocked journal-output
+	[ "$journal_status" -eq 1 ] && normal_swap ||
+		blocked format-readback
+	rm -f "$trial_marker" || blocked marker-clear
+	[ ! -e "$trial_marker" ] && [ ! -L "$trial_marker" ] ||
+		blocked marker-clear-readback
+	printf 'GKD_APPLICATION_UPDATE=MARK_GOOD outcome=complete target=%s\n' "$runtime_id"
+}
+
+[ "$#" = 1 ] || {
+	echo 'usage: gkd-application-update boot|mark-good' >&2
+	exit 64
+}
+case "$1" in
+	boot) boot ;;
+	mark-good) mark_good ;;
+	*) echo 'usage: gkd-application-update boot|mark-good' >&2; exit 64 ;;
+esac

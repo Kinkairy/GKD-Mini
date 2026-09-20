@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Explicit manual preview only; this is neither installed nor auto-invoked.
+set -eu
+
+case $# in
+    3) ;;
+    *) exit 2 ;;
+esac
+
+config_get=${GKD_UI_MENU_PREVIEW_CONFIG_GET:-/usr/sbin/gkd-config}
+value=$("$config_get" get ui_dynamic_effects) || exit 1
+case "$value" in
+    enabled|disabled) ;;
+    *) exit 1 ;;
+esac
+
+case $0 in
+    */*) directory=${0%/*} ;;
+    *) directory=. ;;
+esac
+directory=$(CDPATH= cd -- "$directory" && pwd -P)
+exec "$directory/gkd-ui-menu-probe" "$1" "$2" "$3" "$value"

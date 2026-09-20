@@ -1,0 +1,1068 @@
+{
+  "credential_policy": "runtime-copy-only-from-P2;never-embedded",
+  "dependency_list": [
+    {
+      "bytes": 717596,
+      "destination_mode": "0755",
+      "path": "/bin/busybox",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3d5c35d2ab5ab111d51c471838b78c65ab4631eebba2974d65d495013e28c5be",
+      "source_mode": "04755",
+      "type": "regular"
+    },
+    {
+      "bytes": 31732,
+      "destination_mode": "0755",
+      "path": "/lib/ld-uClibc-0.9.33.2.so",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "2245a1dc4380b87e9a6cf0ad031fa940ec04a476b7c06659dd1838f50ef8413a",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 372088,
+      "destination_mode": "0755",
+      "path": "/lib/libuClibc-0.9.33.2.so",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "acfc0f346d4b3878d4a1c009b61132a154a1af342e80ca7cdce334463aaaf4ce",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 48376,
+      "destination_mode": "0755",
+      "path": "/lib/libm-0.9.33.2.so",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "a02e212394b6c3f42e3fd3acd2e362ca06d20f308f5cbed95f392c10dd317056",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 572,
+      "destination_mode": "0644",
+      "path": "/etc/passwd",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "a819d5a3390bf491ddaf985aee1b4827af21dee828899df5c964dc9878bed020",
+      "source_mode": "0644",
+      "type": "regular"
+    },
+    {
+      "bytes": 224,
+      "destination_mode": "0644",
+      "path": "/etc/group",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "aeb15a0a594b49b5422a2a7adc938cfe22f9959b154c380d80773399b2e56d25",
+      "source_mode": "0644",
+      "type": "regular"
+    },
+    {
+      "bytes": 192,
+      "destination_mode": "0600",
+      "path": "/etc/gkd-mini/udhcpd.conf",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "45ad8e6243c0181dbd634ba14714afba181ebbc9fab403671289c88f3693d898",
+      "source_mode": "0600",
+      "type": "regular"
+    },
+    {
+      "bytes": 653744,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/dropbear",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "9c17706188ce0688adfeef900174d6eb18b0f34cbf68f90cc1074e95b982811f",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 773,
+      "destination_mode": "0600",
+      "path": "/etc/gkd-mini/round64-frontend-contract",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "12f87590b23a626550dc3d434ed2aa73f536e604b5059ac20571ca3e43ef8f21",
+      "source_mode": "0600",
+      "type": "regular"
+    },
+    {
+      "bytes": 149,
+      "destination_mode": "0600",
+      "path": "/etc/gkd-mini/round64-raw-contract",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "5b4e497cbb55b4edc1a369525aec5a22641a25cb3a9e5572105936edb0e6eae6",
+      "source_mode": "0600",
+      "type": "regular"
+    },
+    {
+      "bytes": 823,
+      "destination_mode": "0600",
+      "path": "/etc/gkd-mini/round64-transition-contract",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "f53726058956a754ebdc0ae131bd8b30fe8933c09d7ca9e66d69604c2f31184e",
+      "source_mode": "0600",
+      "type": "regular"
+    },
+    {
+      "bytes": 30,
+      "destination_mode": "0600",
+      "path": "/etc/gkd-mini/round64-usb-owner",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "45f51850617fab96e774eebab35109399ee69ddb617080a6f8981766579b755a",
+      "source_mode": "0600",
+      "type": "regular"
+    },
+    {
+      "bytes": 3764,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round64-filecheck",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "5a7a7ebac2cdb27659392c82b6350a00beb3e19bf1d60873d231aaf7a5f0787e",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 15656,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round64-state-publisher",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "300a9d91a52c317d4838d59f360aa229ccbffac6a4baab4816d28bc2d072f47e",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 3596,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round64-transition-commit",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "240240baa7f67a994617dccb0d067860a287e2f5cf4c19e62642ebf319c5592d",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 11956,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round64-transition-writer",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3e59015a5d2eac5b3c9f08d6f2113572d79ea6a50fe5433cbf70f5b1da8b00ce",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 6656,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-usb-mode",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "23ff0439e9d04be90a74a4afc71124fb8302151860f0f34f6b6aa4df53f6f0a0",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 5396,
+      "destination_mode": "0755",
+      "path": "/usr/lib/gkd-usb-round64/gkd-round64-rescue-ui",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "0fbce5b09a014ba61859159d97edea4a7bc4e3c7e5f1c20994bd8e36417a9749",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 31884,
+      "destination_mode": "0755",
+      "path": "/usr/lib/gkd-usb-round64/gkd-usb-mode-body",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "e22174f2dfef6a51448f5b003c2bb9af264aa1939a4572889bd6d1980d9ddf82",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 435,
+      "destination_mode": "0755",
+      "path": "/usr/lib/gkd-usb-round64/rescue-ssh-caller",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "e10a96a5bd211ece378f2ef9a157f99e14affe64301489335eca1e70bbc2a5b5",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 9621,
+      "destination_mode": "0755",
+      "path": "/usr/lib/gkd-usb-round64/ssh-rndis-hook",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "66693030dc726e0a176cca07d4bfebeda21c497c75dc992c47fb40d1a0d31a47",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 5488,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round80-trigger",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "ffcf5b0986b4c60d4d5e88453c69ac68d0eb2cacc4fc981feac6ef917f7c8872",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 19240,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-round80-return-agent",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3a7357e65930a3afa265fe122c67c8178fb293cb2169a3c62437e0717532cbdb",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 6914,
+      "destination_mode": "0644",
+      "path": "/etc/gkd-mini/gdkmini.conf",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "fd6713652593cbe6838e0bf0edefb4279314c137a6b86b9d608ed7e669d8d47c",
+      "source_mode": "0644",
+      "type": "regular"
+    },
+    {
+      "bytes": 14408,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-action-freeze",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "c8c868d4221ed291fb2d35f1db374fb2b33f26eb1170b2f7f6f270be0910c269",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 731,
+      "destination_mode": "0755",
+      "path": "/etc/init.d/S94gkd-screenshot",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "7c53fc660a3526450ef670aab4ea989645c958f204eaa13c4999b88d6324f550",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "bytes": 17648,
+      "destination_mode": "0755",
+      "path": "/usr/sbin/gkd-screenshot",
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "b90b4269f52c425360c58c1016a8bd35b4189fd7f58f73f8e7de4ab32a138d95",
+      "source_mode": "0755",
+      "type": "regular"
+    },
+    {
+      "path": "/lib/ld-uClibc.so.0",
+      "source_required": true,
+      "target": "ld-uClibc-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "path": "/lib/libc.so.0",
+      "source_required": true,
+      "target": "libuClibc-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "path": "/lib/libm.so.0",
+      "source_required": true,
+      "target": "libm-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/awk",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/blockdev",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/cat",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/chmod",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/chown",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/cmp",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/cp",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/date",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/env",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/grep",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/id",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/ifconfig",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/kill",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/ln",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/logger",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/mkdir",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/mount",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/mv",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/printf",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/readlink",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/reboot",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/rm",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/rmdir",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/sed",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/sh",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/sleep",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/sync",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/test",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/true",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/udhcpd",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/umount",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/usr/bin/dropbearkey",
+      "source_required": false,
+      "target": "/usr/sbin/dropbear",
+      "type": "symlink"
+    },
+    {
+      "path": "/bin/ls",
+      "source_required": true,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "path": "/sbin/start-stop-daemon",
+      "source_required": true,
+      "target": "../bin/busybox",
+      "type": "symlink"
+    }
+  ],
+  "dependency_tree_sha256": "d525ecb08381771aaae385fe8db30630dcc75c7183546562d3777b9ca0a1072a",
+  "format": "gkd-round83-ram-payload-v1",
+  "inputs": {
+    "legacy_manifest_sha256": "c27febc2216d33589f20ac72e8e9061520e21e00a5fddda0bbade742551d5dbe",
+    "ram_closure_p1_sha256": "11227ffdf3125b7961c3aea50203da5eaf423c11186e40b39c426cdbf52f3cac",
+    "ram_profile": "round83"
+  },
+  "p1_regular_files": [
+    {
+      "bytes": 717596,
+      "destination": "/bin/busybox",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3d5c35d2ab5ab111d51c471838b78c65ab4631eebba2974d65d495013e28c5be",
+      "source": "/bin/busybox",
+      "source_mode": "04755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 31732,
+      "destination": "/lib/ld-uClibc-0.9.33.2.so",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "2245a1dc4380b87e9a6cf0ad031fa940ec04a476b7c06659dd1838f50ef8413a",
+      "source": "/lib/ld-uClibc-0.9.33.2.so",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 372088,
+      "destination": "/lib/libuClibc-0.9.33.2.so",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "acfc0f346d4b3878d4a1c009b61132a154a1af342e80ca7cdce334463aaaf4ce",
+      "source": "/lib/libuClibc-0.9.33.2.so",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 48376,
+      "destination": "/lib/libm-0.9.33.2.so",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "a02e212394b6c3f42e3fd3acd2e362ca06d20f308f5cbed95f392c10dd317056",
+      "source": "/lib/libm-0.9.33.2.so",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 572,
+      "destination": "/etc/passwd",
+      "destination_mode": "0644",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "a819d5a3390bf491ddaf985aee1b4827af21dee828899df5c964dc9878bed020",
+      "source": "/etc/passwd",
+      "source_mode": "0644",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 224,
+      "destination": "/etc/group",
+      "destination_mode": "0644",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "aeb15a0a594b49b5422a2a7adc938cfe22f9959b154c380d80773399b2e56d25",
+      "source": "/etc/group",
+      "source_mode": "0644",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 192,
+      "destination": "/etc/gkd-mini/udhcpd.conf",
+      "destination_mode": "0600",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "45ad8e6243c0181dbd634ba14714afba181ebbc9fab403671289c88f3693d898",
+      "source": "/etc/gkd-mini/udhcpd.conf",
+      "source_mode": "0600",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 653744,
+      "destination": "/usr/sbin/dropbear",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "9c17706188ce0688adfeef900174d6eb18b0f34cbf68f90cc1074e95b982811f",
+      "source": "/usr/sbin/dropbear",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 773,
+      "destination": "/etc/gkd-mini/round64-frontend-contract",
+      "destination_mode": "0600",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "12f87590b23a626550dc3d434ed2aa73f536e604b5059ac20571ca3e43ef8f21",
+      "source": "/etc/gkd-mini/round64-frontend-contract",
+      "source_mode": "0600",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 149,
+      "destination": "/etc/gkd-mini/round64-raw-contract",
+      "destination_mode": "0600",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "5b4e497cbb55b4edc1a369525aec5a22641a25cb3a9e5572105936edb0e6eae6",
+      "source": "/etc/gkd-mini/round64-raw-contract",
+      "source_mode": "0600",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 823,
+      "destination": "/etc/gkd-mini/round64-transition-contract",
+      "destination_mode": "0600",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "f53726058956a754ebdc0ae131bd8b30fe8933c09d7ca9e66d69604c2f31184e",
+      "source": "/etc/gkd-mini/round64-transition-contract",
+      "source_mode": "0600",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 30,
+      "destination": "/etc/gkd-mini/round64-usb-owner",
+      "destination_mode": "0600",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "45f51850617fab96e774eebab35109399ee69ddb617080a6f8981766579b755a",
+      "source": "/etc/gkd-mini/round64-usb-owner",
+      "source_mode": "0600",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 3764,
+      "destination": "/usr/sbin/gkd-round64-filecheck",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "5a7a7ebac2cdb27659392c82b6350a00beb3e19bf1d60873d231aaf7a5f0787e",
+      "source": "/usr/sbin/gkd-round64-filecheck",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 15656,
+      "destination": "/usr/sbin/gkd-round64-state-publisher",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "300a9d91a52c317d4838d59f360aa229ccbffac6a4baab4816d28bc2d072f47e",
+      "source": "/usr/sbin/gkd-round64-state-publisher",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 3596,
+      "destination": "/usr/sbin/gkd-round64-transition-commit",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "240240baa7f67a994617dccb0d067860a287e2f5cf4c19e62642ebf319c5592d",
+      "source": "/usr/sbin/gkd-round64-transition-commit",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 11956,
+      "destination": "/usr/sbin/gkd-round64-transition-writer",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3e59015a5d2eac5b3c9f08d6f2113572d79ea6a50fe5433cbf70f5b1da8b00ce",
+      "source": "/usr/sbin/gkd-round64-transition-writer",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 6656,
+      "destination": "/usr/sbin/gkd-usb-mode",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "23ff0439e9d04be90a74a4afc71124fb8302151860f0f34f6b6aa4df53f6f0a0",
+      "source": "/usr/sbin/gkd-usb-mode",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 5396,
+      "destination": "/usr/lib/gkd-usb-round64/gkd-round64-rescue-ui",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "0fbce5b09a014ba61859159d97edea4a7bc4e3c7e5f1c20994bd8e36417a9749",
+      "source": "/usr/lib/gkd-usb-round64/gkd-round64-rescue-ui",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 31884,
+      "destination": "/usr/lib/gkd-usb-round64/gkd-usb-mode-body",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "e22174f2dfef6a51448f5b003c2bb9af264aa1939a4572889bd6d1980d9ddf82",
+      "source": "/usr/lib/gkd-usb-round64/gkd-usb-mode-body",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 435,
+      "destination": "/usr/lib/gkd-usb-round64/rescue-ssh-caller",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "e10a96a5bd211ece378f2ef9a157f99e14affe64301489335eca1e70bbc2a5b5",
+      "source": "/usr/lib/gkd-usb-round64/rescue-ssh-caller",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 9621,
+      "destination": "/usr/lib/gkd-usb-round64/ssh-rndis-hook",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "66693030dc726e0a176cca07d4bfebeda21c497c75dc992c47fb40d1a0d31a47",
+      "source": "/usr/lib/gkd-usb-round64/ssh-rndis-hook",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 5488,
+      "destination": "/usr/sbin/gkd-round80-trigger",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "ffcf5b0986b4c60d4d5e88453c69ac68d0eb2cacc4fc981feac6ef917f7c8872",
+      "source": "/usr/sbin/gkd-round80-trigger",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 19240,
+      "destination": "/usr/sbin/gkd-round80-return-agent",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "3a7357e65930a3afa265fe122c67c8178fb293cb2169a3c62437e0717532cbdb",
+      "source": "/usr/sbin/gkd-round80-return-agent",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 6914,
+      "destination": "/etc/gkd-mini/gdkmini.conf",
+      "destination_mode": "0644",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "fd6713652593cbe6838e0bf0edefb4279314c137a6b86b9d608ed7e669d8d47c",
+      "source": "/etc/gkd-mini/gdkmini.conf",
+      "source_mode": "0644",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 14408,
+      "destination": "/usr/sbin/gkd-action-freeze",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "c8c868d4221ed291fb2d35f1db374fb2b33f26eb1170b2f7f6f270be0910c269",
+      "source": "/usr/sbin/gkd-action-freeze",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 731,
+      "destination": "/etc/init.d/S94gkd-screenshot",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "7c53fc660a3526450ef670aab4ea989645c958f204eaa13c4999b88d6324f550",
+      "source": "/etc/init.d/S94gkd-screenshot",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    },
+    {
+      "bytes": 17648,
+      "destination": "/usr/sbin/gkd-screenshot",
+      "destination_mode": "0755",
+      "gid": 0,
+      "provenance": "round83-final-p1-debugfs-readback",
+      "sha256": "b90b4269f52c425360c58c1016a8bd35b4189fd7f58f73f8e7de4ab32a138d95",
+      "source": "/usr/sbin/gkd-screenshot",
+      "source_mode": "0755",
+      "type": "regular",
+      "uid": 0
+    }
+  ],
+  "p1_symlinks": [
+    {
+      "destination": "/lib/ld-uClibc.so.0",
+      "source": "/lib/ld-uClibc.so.0",
+      "source_required": true,
+      "target": "ld-uClibc-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "destination": "/lib/libc.so.0",
+      "source": "/lib/libc.so.0",
+      "source_required": true,
+      "target": "libuClibc-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "destination": "/lib/libm.so.0",
+      "source": "/lib/libm.so.0",
+      "source_required": true,
+      "target": "libm-0.9.33.2.so",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/awk",
+      "source": "/bin/awk",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/blockdev",
+      "source": "/bin/blockdev",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/cat",
+      "source": "/bin/cat",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/chmod",
+      "source": "/bin/chmod",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/chown",
+      "source": "/bin/chown",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/cmp",
+      "source": "/bin/cmp",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/cp",
+      "source": "/bin/cp",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/date",
+      "source": "/bin/date",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/env",
+      "source": "/bin/env",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/grep",
+      "source": "/bin/grep",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/id",
+      "source": "/bin/id",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/ifconfig",
+      "source": "/bin/ifconfig",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/kill",
+      "source": "/bin/kill",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/ln",
+      "source": "/bin/ln",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/logger",
+      "source": "/bin/logger",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/mkdir",
+      "source": "/bin/mkdir",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/mount",
+      "source": "/bin/mount",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/mv",
+      "source": "/bin/mv",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/printf",
+      "source": "/bin/printf",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/readlink",
+      "source": "/bin/readlink",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/reboot",
+      "source": "/bin/reboot",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/rm",
+      "source": "/bin/rm",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/rmdir",
+      "source": "/bin/rmdir",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/sed",
+      "source": "/bin/sed",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/sh",
+      "source": "/bin/sh",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/sleep",
+      "source": "/bin/sleep",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/sync",
+      "source": "/bin/sync",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/test",
+      "source": "/bin/test",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/true",
+      "source": "/bin/true",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/udhcpd",
+      "source": "/bin/udhcpd",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/umount",
+      "source": "/bin/umount",
+      "source_required": false,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/usr/bin/dropbearkey",
+      "source": "/usr/bin/dropbearkey",
+      "source_required": false,
+      "target": "/usr/sbin/dropbear",
+      "type": "symlink"
+    },
+    {
+      "destination": "/bin/ls",
+      "source": "/bin/ls",
+      "source_required": true,
+      "target": "busybox",
+      "type": "symlink"
+    },
+    {
+      "destination": "/sbin/start-stop-daemon",
+      "source": "/sbin/start-stop-daemon",
+      "source_required": true,
+      "target": "../bin/busybox",
+      "type": "symlink"
+    }
+  ],
+  "physical_media_accessed": false,
+  "round83_userspace_a_b": [],
+  "status": "ROUND83_INPUTS_HASH_MODE_SIZE_LOCKED_NOT_DEPLOYED",
+  "writer_or_sealer_invoked": false
+}

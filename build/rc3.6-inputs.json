@@ -1,0 +1,23 @@
+{
+  "release": "RC3.6",
+  "files": {
+    "p1.img": {
+      "sha256": "0d858514125eacd54bf9a565cbb1cc22e538dfcb0d53b3ea24ffb7e2afa4a0cf",
+      "bytes": 805306880
+    },
+    "busybox-1.22.1.tar.bz2": {
+      "sha256": "ae0b029d0a9e4dd71a077a790840e496dd838998e4571b87b60fed7462b6678b",
+      "bytes": 2218650
+    },
+    "slot-header-template.bin": {
+      "sha256": "b2d22dbc946238d00ff61489e86ca367b4ff6b4c40607c4bef06534acf3c46ee",
+      "bytes": 6291456,
+      "purpose": "header fields only; not firmware or a rollback image"
+    }
+  },
+  "kernel_source_commit": "91fe78280ac7dd0dae0f58cb271e821bd39ba97e",
+  "builder_image": "sha256:43526337ccf802bc40fac6745f099c3686a7deca335cab780b5bcd76e64d63a1",
+  "kernel_source": "/opt/gkd-build/private-state/gkd-mini-system-rebuild/kernel-sources/ingenic-community-linux-6.1",
+  "kernel_toolchain": "/opt/gkd-build/.cache/gkd-mini-v1.2/ingenic-toolchain-v5.2",
+  "userspace_toolchain": "/srv/c-builder/toolchains/gkdmini-gcw0-d28"
+}

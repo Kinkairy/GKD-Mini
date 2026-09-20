@@ -1,0 +1,63 @@
+#!/bin/sh
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+SCHEMA=${GKD_CONFIG_SCHEMA:-/usr/share/gkd-mini/gdkmini.schema}
+OVERRIDE=${GKD_CONFIG_OVERRIDE:-/usr/local/etc/gkd-mini/gdkmini.override.conf}
+CONFIG_RUN=${GKD_CONFIG_RUN_DIR:-/run/gkd-config}
+SERVICE_RUN=${GKD_SERVICE_RUN_DIR:-/run/gkd-service}
+CONFIG_CMD=${GKD_CONFIG_CMD:-/usr/sbin/gkd-config}
+SERVICE_CMD=${GKD_SERVICE_CMD:-/usr/sbin/gkd-service}
+INTERVAL=${GKD_CONFIG_POLL_SECONDS:-1}
+SEEN=$SERVICE_RUN/seen-source
+
+source_identity()
+{
+	{
+		sha256sum "$SCHEMA" || return 1
+		if [ -r "$OVERRIDE" ]; then
+			sha256sum "$OVERRIDE"
+		else
+			printf 'no-override\n'
+		fi
+	} | sha256sum | awk '{print $1}'
+}
+
+atomic_seen()
+{
+	temporary=$SERVICE_RUN/.seen.$$
+	printf '%s\n' "$1" >"$temporary" || return 1
+	mv -fT "$temporary" "$SEEN"
+}
+
+poll_once()
+{
+	mkdir -p "$SERVICE_RUN" || return 1
+	identity=$(source_identity) || return 1
+	[ "$(cat "$SEEN" 2>/dev/null)" != "$identity" ] || return 0
+	prepared=$("$CONFIG_CMD" prepare) || return $?
+	generation=$(printf '%s\n' "$prepared" |
+		sed -n 's/^GKD_CONFIG_PREPARED generation=\([0-9a-f]*\) .*/\1/p')
+	case "$generation" in ''|*[!0-9a-f]*) return 1 ;; esac
+	[ "${#generation}" -eq 64 ] || return 1
+	new_generation=$CONFIG_RUN/generations/$generation
+	if [ -L "$CONFIG_RUN/current" ]; then
+		old_target=$(readlink "$CONFIG_RUN/current") || return 1
+		old_generation=$CONFIG_RUN/$old_target
+		"$SERVICE_CMD" apply-config "$old_generation" "$new_generation" "$generation" || return $?
+	else
+		"$CONFIG_CMD" commit "$generation" || return $?
+	fi
+	atomic_seen "$identity" || return 1
+	printf 'GKD_CONFIGD_APPLIED generation=%s\n' "$generation"
+}
+
+case "${1:-daemon}" in
+	once) poll_once ;;
+	daemon)
+		while :; do
+			poll_once || true
+			sleep "$INTERVAL"
+		done
+		;;
+	*) echo 'usage: gkd-configd {once|daemon}' >&2; exit 2 ;;
+esac

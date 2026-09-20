@@ -1,0 +1,71 @@
+#!/bin/sh
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+PID=/var/run/gkd-input.pid
+LOG=/var/log/gkd-mini-input.log
+
+running()
+{
+	[ -s "$PID" ] || return 1
+	pid=$(cat "$PID" 2>/dev/null)
+	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+	kill -0 "$pid" 2>/dev/null
+}
+
+case "${1:-start}" in
+	start)
+		if running; then exit 0; fi
+		rm -f "$PID"
+		if [ ! -c /dev/uinput ] && [ ! -c /dev/input/uinput ]; then
+			if ! insmod /usr/lib/gkd-uinput.ko; then
+				echo 'GKD_INPUT_MODULE_LOAD_FAILED' >>"$LOG"
+				exit 1
+			fi
+		fi
+		i=0
+		while [ "$i" -lt 50 ]; do
+			[ -c /dev/uinput ] || [ -c /dev/input/uinput ] && break
+			usleep 20000
+			i=$((i + 1))
+		done
+		if [ ! -c /dev/uinput ] && [ ! -c /dev/input/uinput ]; then
+			echo 'GKD_INPUT_DEVICE_TIMEOUT' >>"$LOG"
+			exit 1
+		fi
+		if [ "${GKD_INPUT_REQUIRE_OWNER:-0}" = 1 ]; then
+			set -- daemon --require-owner
+		else
+			set -- daemon
+		fi
+		if ! start-stop-daemon -S -b -m -p "$PID" -x /usr/sbin/gkd-input -- "$@" >>"$LOG" 2>&1; then
+			echo 'GKD_INPUT_START_FAILED' >>"$LOG"
+			exit 1
+		fi
+		i=0
+		while [ "$i" -lt 50 ]; do
+			/usr/sbin/gkd-input status >/dev/null 2>&1 && exit 0
+			usleep 20000
+			i=$((i + 1))
+		done
+		echo 'GKD_INPUT_READY_TIMEOUT' >>"$LOG"
+		exit 1
+		;;
+	stop)
+		if running; then
+			old_pid=$(cat "$PID")
+			kill "$old_pid" 2>/dev/null || true
+			i=0
+			while kill -0 "$old_pid" 2>/dev/null && [ "$i" -lt 20 ]; do
+				usleep 50000
+				i=$((i + 1))
+			done
+			kill -0 "$old_pid" 2>/dev/null && kill -9 "$old_pid" 2>/dev/null || true
+		fi
+		rm -f "$PID"
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*) exit 2 ;;
+esac

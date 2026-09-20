@@ -1,0 +1,31 @@
+#!/bin/sh
+# User-facing standard update action. UI wrappers may call this after A confirms.
+set -eu
+package=/media/sdcard/gkd-update/system.gkdupdate
+public_key=/etc/gkd-mini/update-public.pem
+runtime_id_file=/etc/gkd-mini/runtime-id
+prepare=/usr/sbin/gkd-update-prepare
+battery=/usr/sbin/gkd-battery-notify
+config=${GKD_CONFIG_EFFECTIVE:-/run/gkd-config/current/effective.conf}
+[ -r "$config" ] || config=/etc/gkd-mini/gdkmini.conf
+[ -f "$package" ] || { echo '未找到更新包'; exit 2; }
+[ -r "$public_key" ] && [ -r "$runtime_id_file" ] && [ -x "$prepare" ] || {
+	echo '更新组件不完整'; exit 2;
+}
+runtime_id=$(sed -n '1p' "$runtime_id_file")
+case "$runtime_id" in *[!0-9a-f]*|'') echo '当前版本标识无效'; exit 2;; esac
+[ "${#runtime_id}" -eq 64 ] || { echo '当前版本标识无效'; exit 2; }
+probe=$($battery --probe-once "$config" 2>/dev/null || true)
+percent=${probe#percent=}; percent=${percent%% *}
+case "$percent" in ''|*[!0-9]*) echo '无法读取电量'; exit 2;; esac
+if [ "$percent" -lt 30 ]; then
+	powered=0
+	for state in /sys/class/udc/*/state; do
+		[ -r "$state" ] || continue
+		case "$(sed -n '1p' "$state")" in configured|addressed|powered) powered=1;; esac
+	done
+	[ "$powered" -eq 1 ] || { echo '电量低于30%，请连接USB电源'; exit 2; }
+fi
+"$prepare" "$package" "$public_key" /dev/mmcblk0 "$runtime_id" /dev/mmcblk0p3
+sync
+reboot

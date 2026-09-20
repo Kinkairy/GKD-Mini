@@ -1,0 +1,2363 @@
+{
+  "project": "GKD Mini",
+  "version": "RC3.6",
+  "kind": "public-source-snapshot",
+  "source_commit": "364621732c34e547d50c25f078ed4ed0106dc358",
+  "firmware_distributed": false,
+  "full_public_firmware_build_verified": false,
+  "omitted_build_inputs": [
+    "original userspace partition",
+    "toolchains",
+    "accepted builder image",
+    "slot-header template",
+    "recovery boot artwork"
+  ],
+  "normalization": "Build-host paths only; see docs/BUILDING.md. Existing source license headers retained.",
+  "files": {
+    ".gitattributes": {
+      "sha256": "4ffac4c59a36b96a2552b7f7e55cd291fe5d1ac17f3d5cc10a43ecbecafeaf8e",
+      "bytes": 28,
+      "mode": "100644"
+    },
+    ".gitignore": {
+      "sha256": "6feaded4e28ea86e001a6751b4e3d960e8b7c31b9616ff9936b79297086e809b",
+      "bytes": 23,
+      "mode": "100644"
+    },
+    "CHANGELOG.md": {
+      "sha256": "a7eaa60f2e0b7940ec0f9b37d6eeb44d17b061ddd5c6610a4bd26f42aaccb5bb",
+      "bytes": 967,
+      "mode": "100644"
+    },
+    "CONTRIBUTING.md": {
+      "sha256": "c45836b4e6d14f50bd31964b3a9946c8b9dbd775b217bd7898027dad0388221e",
+      "bytes": 962,
+      "mode": "100644"
+    },
+    "LICENSE": {
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "bytes": 18092,
+      "mode": "100644"
+    },
+    "NOTICE.md": {
+      "sha256": "85c3106b724ca73e5f5f2f968eba494e5a3c7b705ee55792a5d2b89518921c5b",
+      "bytes": 1897,
+      "mode": "100644"
+    },
+    "README.md": {
+      "sha256": "1acacccbadf1f6a243099e38495cfe5fec7f785caabea65e98db735c3ec03ed6",
+      "bytes": 2922,
+      "mode": "100644"
+    },
+    "SECURITY.md": {
+      "sha256": "3995869368174202c6e40f76fc1cd3304cfd91e18e88746fcfa9186f618bc809",
+      "bytes": 830,
+      "mode": "100644"
+    },
+    "VERSION": {
+      "sha256": "ea5a130c2c5447d5f374b92f0a0a5c9131e07bd6616a170b5546add17a4769e4",
+      "bytes": 6,
+      "mode": "100644"
+    },
+    "build/container/c-builder/Dockerfile": {
+      "sha256": "465d85919393c43dbdbe742fd7f598e550d8c2877277f4cbf2f6caab3fd8a449",
+      "bytes": 945,
+      "mode": "100644"
+    },
+    "build/container/c-builder/Dockerfile.kernel": {
+      "sha256": "6398cbb4e2b842036de4bf5aa9224c9909beef639a9e0526ca31779cfd0a7bb1",
+      "bytes": 580,
+      "mode": "100644"
+    },
+    "build/container/c-builder/compose.yaml": {
+      "sha256": "7726b3824a7084ec5ca5c0b7ad2f7c9876dd4b3a4a3ba82d8a5f56155012b304",
+      "bytes": 488,
+      "mode": "100644"
+    },
+    "build/container/c-builder/toolchain-check.sh": {
+      "sha256": "9561f292eb9da9748db597c802f261befa84d107900472f24a2ec1ad33ba0693",
+      "bytes": 322,
+      "mode": "100755"
+    },
+    "build/offline/locked-squashfs/bin/mksquashfs": {
+      "sha256": "ef26db2159258095a4986d78e05f4f01371f78e8e8134d7fea14738acbb6a3ca",
+      "bytes": 618,
+      "mode": "100755"
+    },
+    "build/offline/locked-squashfs/bin/unsquashfs": {
+      "sha256": "865f8c2a2fbe1fcd6d0a7cbffb9c81e1e0c8d9f103d2b4c002857aa6ce74075c",
+      "bytes": 618,
+      "mode": "100755"
+    },
+    "build/rc3.6-inputs.json": {
+      "sha256": "2f463698b1a7eb3b5a52390fac263c2ee5c7fb80ec2ba40b59950a05f5bf4a92",
+      "bytes": 978,
+      "mode": "100644"
+    },
+    "docs/ARCHITECTURE.md": {
+      "sha256": "741dba70376989a2db962fc76352f02dd30065b48ec533f0f95b58c40c01cfea",
+      "bytes": 1179,
+      "mode": "100644"
+    },
+    "docs/BUILDING.md": {
+      "sha256": "2f4c218ff3a89f58305e58ca5b5b8d2a487abefeb18bcfbfce6f08227058a4f2",
+      "bytes": 2805,
+      "mode": "100644"
+    },
+    "docs/CONFIGURATION.md": {
+      "sha256": "78580c0464ee1920ef376128df1c110d6b5906f598aa4fbc57d12952b407d308",
+      "bytes": 1656,
+      "mode": "100644"
+    },
+    "docs/STATUS.md": {
+      "sha256": "47d16a997903eda705c37c52643c0da7580487e88136151394afe9e5d3b66d48",
+      "bytes": 2097,
+      "mode": "100644"
+    },
+    "kernel/current/config/rc34.config": {
+      "sha256": "9ff2373a77f46ab868b8f472980b57ca100a8729037421f69e927cc9bcf34834",
+      "bytes": 109026,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/dedicated-r-boot.h": {
+      "sha256": "743a4cff78143f8a2797b4b412209985451c68a419122f4b7b7ecf5d60faa5af",
+      "bytes": 1951,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/dedicated-r-p1-manifest.json": {
+      "sha256": "71a1f2fd5d2ea15a0e1cbe5aea5bec03d33a1d4eccc0573c092faad86f108203",
+      "bytes": 1777,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/dedicated-r-power-gate.sh": {
+      "sha256": "e7c71394e3a028946c6db5f9df8a644174d73eee68c268e0379947e62711d1eb",
+      "bytes": 723,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/dedicated-r-update.sh": {
+      "sha256": "29dc415aa8447a288316970376f5d898037333de93c44617684aebe77910bb0c",
+      "bytes": 2566,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/gkd-recovery": {
+      "sha256": "7caed77b7adae0200c9df14d350286427be91e5688906199499be8ac4b91c137",
+      "bytes": 3271,
+      "mode": "100755"
+    },
+    "kernel/current/initramfs/gkd-recovery-mass-storage": {
+      "sha256": "fa1461bea50926b9a586aac5a13fb033bed286bd96aa1ed85a442d622e7b1fe8",
+      "bytes": 3400,
+      "mode": "100755"
+    },
+    "kernel/current/initramfs/gkd-recovery-usb": {
+      "sha256": "6e02c6e21a074b1942f79f4491a5419641652cffa22664f1daa6c361ee364831",
+      "bytes": 8007,
+      "mode": "100755"
+    },
+    "kernel/current/initramfs/ram-payload-manifest.json": {
+      "sha256": "d3c7ec22d962650ac8d0e9c5cc77be73aaaaa1ad563c3a4698eede009fc8122a",
+      "bytes": 30517,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/round38-animation-format.h": {
+      "sha256": "52d9a53d3ba6f59907d61e2950f1f2dd34a8c722938f157f522d50d2ff8d3f7a",
+      "bytes": 2519,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/round64-request-gate.h": {
+      "sha256": "b17c20deb0bc380e82c5f94dc455648aaa9b099024093c71bd1ba481b87c80ce",
+      "bytes": 3739,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/round83-maintenance-loader.generated.h": {
+      "sha256": "97b564b45859a90c9f68da3d88dbcd788a887b0c077623658e3af63b956cb0d0",
+      "bytes": 47391,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/round83-ram-payload.generated.h": {
+      "sha256": "59617600d163a3edee9a4801527f63f9fa8cc654c1650e1e414d0d66304b7b99",
+      "bytes": 9051,
+      "mode": "100644"
+    },
+    "kernel/current/initramfs/round83-supervisor.c": {
+      "sha256": "27424bffd5ddc0b1524339095fa5fd4871e5ae2f9f993ae94752de9dcc62ce0f",
+      "bytes": 136268,
+      "mode": "100644"
+    },
+    "kernel/current/menu/gkd-menu-vt.inc": {
+      "sha256": "dfb6f44306a0f538389bc14c84830ceed8cffecc1a674c6fb5e58b35d38d4432",
+      "bytes": 18070,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0001-rc34-accepted-kernel.patch": {
+      "sha256": "9740d17d106046163fd3e1aca0a32b1b02a85b29a44ea14392670bcf199d8045",
+      "bytes": 238576,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0002-application-user-plane.patch": {
+      "sha256": "e7197ab7ec5961b71a56e460f06a2d449b0fd6008181a29330b91f1f663dfc7c",
+      "bytes": 25294,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0003-application-power-supply.patch": {
+      "sha256": "3b4124cd5c7e2386213b77d1d374e572fe62a70b957701ca0f9dd46988f36732",
+      "bytes": 5946,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0004-application-debug-freeze.patch": {
+      "sha256": "16eac74f6b0ef7810b90ea3c150e55a843881cecbfdcfaf4f1ba3e5f2c31b4c7",
+      "bytes": 5480,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0005-application-audio-resume.patch": {
+      "sha256": "b330df97b08a958ba1ade07a4e8240e526e26d8a0dbcab06bb5ca5f610e8a59b",
+      "bytes": 5195,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0006-application-dma-compositor.patch": {
+      "sha256": "278d9f545580ab91bb01681e08ad72ec1e51ec593e3ba0d66eb36fefb35f0ad8",
+      "bytes": 22898,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0007-application-board-identity.patch": {
+      "sha256": "23400f762d112dbf1635a86a8a442e8bf66504f0a0a6430cb5bb13d9be94790b",
+      "bytes": 489,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0008-application-menu-vt.patch": {
+      "sha256": "6670bca4c695394dc904eb53a3aa7fc5f20ca72c4e25b3b886a92a2c6cb2ff07",
+      "bytes": 1521,
+      "mode": "100644"
+    },
+    "kernel/current/patches/0009-application-triple-buffer.patch": {
+      "sha256": "edcac1d75e660da416c1a9db105b36d72c0274a993dd0c4ff433e3d612ac7d6a",
+      "bytes": 2492,
+      "mode": "100644"
+    },
+    "kernel/current/scripts/build-in-container.sh": {
+      "sha256": "a91b326a010fa1a59932438a807b11927d15d1a5b2d8e0ae04c23eaa389db8e5",
+      "bytes": 11751,
+      "mode": "100644"
+    },
+    "kernel/current/scripts/build-kernel.sh": {
+      "sha256": "f20bf1c3375f4ac6175443a3cbaf96e89f15ee39a1ae3ad1ccfb72976be12182",
+      "bytes": 1976,
+      "mode": "100755"
+    },
+    "kernel/current/scripts/configure-profile.py": {
+      "sha256": "4010bae6f122d524c7360265b498a51bce3603ef9a55990c82f72811fa6d1a77",
+      "bytes": 4946,
+      "mode": "100644"
+    },
+    "kernel/current/scripts/verify-ram-closure.py": {
+      "sha256": "d186d3e5830db1010109245dc7d8ad1192c0a2954660d7c8a276dc739ffa86d5",
+      "bytes": 9086,
+      "mode": "100755"
+    },
+    "kernel/current/tests/application_freeze_fixture.c": {
+      "sha256": "f4a8b85de4cd47938542d6d5a24f010d48332de497346c1ef4a94ed0dbb049fc",
+      "bytes": 12583,
+      "mode": "100644"
+    },
+    "kernel/current/tests/application_power_fixture.c": {
+      "sha256": "b1daf7e031b2662ab3637ca4ae4a060fe34662b5ad5a19128bce3a247118b2da",
+      "bytes": 2889,
+      "mode": "100644"
+    },
+    "kernel/current/tests/audio_resume_fixture.c": {
+      "sha256": "5a778693c044b0bceac60c201d751ac15108764c6b335c34332600e86456250f",
+      "bytes": 11133,
+      "mode": "100644"
+    },
+    "kernel/current/tests/board_identity_fixture.c": {
+      "sha256": "72846fd026603cc8eabe26394cfed0a449a4165eb10d03923c8a3d36d0c7a6d6",
+      "bytes": 2769,
+      "mode": "100644"
+    },
+    "kernel/current/tests/dma_compositor_fixture.c": {
+      "sha256": "6dd556a8d259cea34e4dfdd4b97aec4501473d1c0229d7aab36edcab2d10e8c0",
+      "bytes": 6788,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_application_audio_resume_test.py": {
+      "sha256": "723110a1a728c7516eda7865af5becebebbdb86b1f8e068f024b011f9b703354",
+      "bytes": 3962,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_application_freeze_test.py": {
+      "sha256": "28cf9a68d305585b44408efecc01d085fa4ece41af70143e515c5fe25b6fbfed",
+      "bytes": 2273,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_application_power_test.py": {
+      "sha256": "17a07322f3f982340f9a7848a6f50f7e6561c50a419ab02d1758f35c1a28e11a",
+      "bytes": 1763,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_board_identity_test.py": {
+      "sha256": "b887c2aff688635d8c1d0c3dd0e56eb38cb7274e307b148a833773e1e426d238",
+      "bytes": 1868,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_dma_compositor_test.py": {
+      "sha256": "f72389e31873f1dc8f3f2f2ed2562d3d4f02e24d129b12b82192f22106b164c3",
+      "bytes": 2989,
+      "mode": "100644"
+    },
+    "kernel/current/tests/extract_user_plane_test.py": {
+      "sha256": "99b04083827fd992fdb34bdaa01ddd17da13d4f78783b93c3e1f483a298778f5",
+      "bytes": 2884,
+      "mode": "100644"
+    },
+    "kernel/current/tests/framebuffer_fixture.c": {
+      "sha256": "4d3bb607a4f863c978f7e0900bc788b0fa6b3f064287244eb0b5c93ddafc6016",
+      "bytes": 3116,
+      "mode": "100644"
+    },
+    "kernel/current/tests/input_route_fixture.c": {
+      "sha256": "e6cb61dcd29224e0f5fe48588478601bc3498a2d6a3926119be95d4f6ed68a41",
+      "bytes": 10539,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_application_audio_resume_tests.sh": {
+      "sha256": "36d33ea9c2d9ddfad35051a2cc0a279d775a717a6cf7575612885c104e5e410e",
+      "bytes": 2839,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_application_power_tests.sh": {
+      "sha256": "b756df1eeba69e7b748f530dfc3ea410e382812bd2de92b1e71579b08523b1d8",
+      "bytes": 584,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_dma_compositor_tests.sh": {
+      "sha256": "e2ebced93e49fde635c14c0c6750ea8e3e0add571a13ce25c06050e96e8a32a4",
+      "bytes": 409,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_framebuffer_tests.py": {
+      "sha256": "40863ae31a5b6b835a3c9fc9c18f8ad2e10bcc7bd045846ca7d3197ede44039a",
+      "bytes": 1587,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_input_route_tests.py": {
+      "sha256": "de075ac81402065c471cb0a545f7904d491c09b1da30d8596875adc38f415dc7",
+      "bytes": 2079,
+      "mode": "100644"
+    },
+    "kernel/current/tests/run_user_plane_tests.sh": {
+      "sha256": "c5d81648e99784d11d33bb7009eb9cf66c2fc94f4030837d1256faa107b68cfc",
+      "bytes": 477,
+      "mode": "100644"
+    },
+    "kernel/current/tests/test_profile_config.py": {
+      "sha256": "ba67c942d8046f00f3d7e2e7c758e845e4623f26ad6d1e7f8653fa9ade08b447",
+      "bytes": 6359,
+      "mode": "100644"
+    },
+    "kernel/current/tests/user_plane_fixture.c": {
+      "sha256": "24d1c374e04cf7b262977826dd12513bd44bd419bce104cf633c6ef83689c320",
+      "bytes": 38855,
+      "mode": "100644"
+    },
+    "system/application-core/LICENSES/GPL-2.0.txt": {
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+      "bytes": 18092,
+      "mode": "100644"
+    },
+    "system/application-core/config/application.override.conf": {
+      "sha256": "94e5e6680a6b00dabf71c8e90dd2956d3decce3ba9c44e2f3ca3c72c49917f1a",
+      "bytes": 184,
+      "mode": "100644"
+    },
+    "system/application-core/config/input-routing.conf": {
+      "sha256": "b7e1e01723433f06ec422f1efbc59891d200e82527a636f09eefc986bcd2a211",
+      "bytes": 5826,
+      "mode": "100644"
+    },
+    "system/application-core/config/minimal-a-manifest.json": {
+      "sha256": "3de64449040f32230e430f0c416dfcbdf244b27be7df484703311cc6b3359e62",
+      "bytes": 5153,
+      "mode": "100644"
+    },
+    "system/application-core/config/ram-payload-profile.json": {
+      "sha256": "8f6b9a852c3a0199723effa249a319218151175c2ee6b274062b3613acbcfec5",
+      "bytes": 1145,
+      "mode": "100644"
+    },
+    "system/application-core/config/stat.config": {
+      "sha256": "86a02461deac5d7b3735002f14141cf9716157252dd5eddf957497a1a893fbed",
+      "bytes": 72,
+      "mode": "100644"
+    },
+    "system/application-core/device/gkd-application-config": {
+      "sha256": "8b3eb468c1f08fcfda1454d0e3348581744f8c7d55145d15fa29ab092c961072",
+      "bytes": 1209,
+      "mode": "100755"
+    },
+    "system/application-core/device/gkd-application-network": {
+      "sha256": "cb3145b638706411c3c9412c2f42deafc345b833fe2cf0e5b8d2a6b6e6117760",
+      "bytes": 13657,
+      "mode": "100644"
+    },
+    "system/application-core/device/gkd-application-start": {
+      "sha256": "2795ffab669a13412c332588d69e0a892ff0145848803089843297b9d33c4760",
+      "bytes": 911,
+      "mode": "100644"
+    },
+    "system/application-core/device/gkd-application-update": {
+      "sha256": "3c0384acf1b4c928954941133ed874c51696d4a4bf906812134ca9eeb71568ce",
+      "bytes": 11466,
+      "mode": "100755"
+    },
+    "system/application-core/device/gkd-application-usb": {
+      "sha256": "9769eaecfdf9b7a6709224476c675497603b21cc0f4217f4c6410aef1dfe4247",
+      "bytes": 11591,
+      "mode": "100644"
+    },
+    "system/application-core/device/gkd-simplemenu-opkrun": {
+      "sha256": "81526fdd4527f757a5a906dadf5574355c4b54a9765d07a5aefb86d3ce063cb6",
+      "bytes": 17993,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-animation.h": {
+      "sha256": "63e619b37d6cd685d23a43111a915395f3e3efe5683525392ba1976bec766934",
+      "bytes": 736,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-battery.h": {
+      "sha256": "2c18e2285e081956b4bbf60f7ce48ef5806deac063b79fee187a3c91ecb9c1b4",
+      "bytes": 1076,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-controls.h": {
+      "sha256": "613d4ae2d711c357cfbc30ad4e65055e988756c9c88e88b19db4837832d68fdb",
+      "bytes": 1067,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-diagnostics.h": {
+      "sha256": "091d129fb223ecc08064a148be0d9a194a6772c36a23240ab019203407bc8a8a",
+      "bytes": 1240,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-display.h": {
+      "sha256": "2d27de06ef2de512ce77ccc4be8da928fc6984a9bc62b3b7d6d893bd541063ba",
+      "bytes": 311,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-events.h": {
+      "sha256": "e826a8c36311c25898cd039bcca0d0c76512669c354a6ca6140c067d0a0b12d3",
+      "bytes": 1069,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-exec.h": {
+      "sha256": "5067b9f39580617d3fdeffe77e3169db53ffa1700299323f62c5af382dcc0fdb",
+      "bytes": 2641,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-fps-gate.h": {
+      "sha256": "eb426e548f5142de095579c20668415542344bc56171eebcacd7c708883a4ca4",
+      "bytes": 648,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-fps-launch.h": {
+      "sha256": "379c670785bda7fba4e7ec35ece6c7d4c836236738730f1952973c191408f422",
+      "bytes": 844,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-fps.h": {
+      "sha256": "534fda7a5157b16efeb03fbd89309fc601815f24d2937f325937d6fc9164f455",
+      "bytes": 1652,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-game-control.h": {
+      "sha256": "11fd3ae4336fe72fecb00af451ec30217e160d9c85144cde1181e20bb30dff89",
+      "bytes": 793,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-identity.h": {
+      "sha256": "3966140a4e95c7f938e0d4aa9cb41607799c8540487d9a9552304c08ba2f6d3d",
+      "bytes": 399,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-idle.h": {
+      "sha256": "7bad25511384ce419f1a0a0008b4e2284ab3a2904a1e02ad3806e73d34bb2edf",
+      "bytes": 869,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-init.h": {
+      "sha256": "9eeaf802e354f74da0236eecb1725afc1b0a6afa2e8ab6cc18e6e793d8ab655a",
+      "bytes": 754,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-job.h": {
+      "sha256": "5e9b66fa955f44a1dfb745a27dff2a33047e868d3e6f1d3e30118900b8511c21",
+      "bytes": 1171,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-lifecycle.h": {
+      "sha256": "d085ca261c02db7c354fe5bfa733cd1fb0ab12e662c5e4f60942fd6b987ae451",
+      "bytes": 5720,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-loop.h": {
+      "sha256": "037acb8c90a98f57a19896aa22266d8391b2450e1a28091f5a2436eee174adf0",
+      "bytes": 837,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-media.h": {
+      "sha256": "a321eafcfc518e3478cf3f735a532f7ad23753b0bcf55d5ca94252e3fe88f2d0",
+      "bytes": 1339,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-menu-config.h": {
+      "sha256": "0941977a3025d11ed48153aee3576a4a4f26f844e36dc6f904e72c853e539105",
+      "bytes": 2354,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-menu-launch.h": {
+      "sha256": "63606b660321e945ca44d59d37e86c41970e97a74fd4e21d7de140e045eda95c",
+      "bytes": 603,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-namespace.h": {
+      "sha256": "b5288f4ac4a237f458f68ba7a7a3299ac9fe744ba5ff942f1cf7c29c42fb7dcd",
+      "bytes": 1074,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-output.h": {
+      "sha256": "dfed649e162e98b1446d49ca5863fb0d78cf30b8bd90907fe6f053178d89938b",
+      "bytes": 1414,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-payload.h": {
+      "sha256": "9c663c5999bf30c2c97db410969f012add8bd44fad1e2085990d710489a0077f",
+      "bytes": 889,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-prepare.h": {
+      "sha256": "00c4903c55152b3a15486f1ef51b47e8ce9b7525de5a51e0108e47f8b83894c6",
+      "bytes": 1588,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-profile.h": {
+      "sha256": "ef69014b94be2589ed107bfe2d504b47d83d591f0f70393528b1168ee435c92f",
+      "bytes": 559,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-ready.h": {
+      "sha256": "b2ce34ea654f48fae329af1e8400431e61167e57c0f8fbb87d018c41cb2d37d7",
+      "bytes": 2296,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-release.h": {
+      "sha256": "6128b9dddb1ad09169d89e4413f770513f72ce8117a5f486d49baf6da77d6a79",
+      "bytes": 2742,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-service.h": {
+      "sha256": "9f33ddddcb2699668ac35a0dad75b843eaba1b5bad1fdade2b21d9abb361066e",
+      "bytes": 252,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-session.h": {
+      "sha256": "b0c5e97b00eb801d75ebb29a476385aa7c9f7141b301fa8d220b023be5c6f8f3",
+      "bytes": 958,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-settings.h": {
+      "sha256": "d4d00160f11e7623c42051580ba9d0b4165bfa65fa7df5d9a6d77d44b9dffdf9",
+      "bytes": 817,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-transfer.h": {
+      "sha256": "e76d198139d2312b10ea5fcb86696503478c4fd6053fad848162323d202826af",
+      "bytes": 2217,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-watch.h": {
+      "sha256": "822d04ec7331b4534f78db0e69be0ee4f1521839a14fe47e4dfcba8d47b9fe46",
+      "bytes": 2357,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-fps-counter.h": {
+      "sha256": "975979d3958404485ec510106d92a670a6be4fd3ed7662c46b334642345f9b03",
+      "bytes": 1802,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-menu-vt.h": {
+      "sha256": "8a6588c0c7e038cc2a358e1dd598c7592bf32cb6ad2e99c83dfceeea11481b8b",
+      "bytes": 1011,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-opk-plan.h": {
+      "sha256": "c23fd9a723fef469696b05926ea730be2b75395f451714493b547b7ea86cfe06",
+      "bytes": 941,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/build-adapters.sh": {
+      "sha256": "f50424c4bb3ade495036b7e582396cfb2300b1935ae98946ad8c6d35cd577cf4",
+      "bytes": 4567,
+      "mode": "100755"
+    },
+    "system/application-core/scripts/build-components.sh": {
+      "sha256": "7bce50f8fd04c31ea497238cd4221172b31e58d044aecfd9d850dd29bb922207",
+      "bytes": 2325,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/build-launcher.py": {
+      "sha256": "8c41bc2764f3b2e62d8bd026c88f853769430283d42b22afafe1f46b734dbf6b",
+      "bytes": 9465,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/build-minimal-a.py": {
+      "sha256": "a1bef326b73e859fe8d6b94539e5a1673cb259f297d6e80f50c90eeb361ffce7",
+      "bytes": 9419,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/build-service.sh": {
+      "sha256": "bf8526c8c16d3ff904bd0b394cc7ad78c6615ee8f2753c2ab7efb2848566cf00",
+      "bytes": 3280,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/build-stat.sh": {
+      "sha256": "5b83dcb1b0ce7e767dae7d67e1cc1c094a21c5fac1a4bc78e37a101e54bd3052",
+      "bytes": 1645,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/derive-schema.py": {
+      "sha256": "f47388663abbb0a2d68b56b8be75d1bdf0a7057c8520204a6cd7ccd2be0ab970",
+      "bytes": 3529,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/derive-usb-bootstrap.py": {
+      "sha256": "52c4c0e5d73ff7beedac9481511b652795029e9586bffb57cbfe587c98c368f4",
+      "bytes": 2738,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/manifest-header.py": {
+      "sha256": "5795390b3e56cf972861946d2403f54e992177cf54afaab0f5c5c6f8080b7d30",
+      "bytes": 1643,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/patch-fba-shoot-board-probe.py": {
+      "sha256": "b1267662d17d74410ae06a0e9801251bbc8162e704bf4063e62aa54397fa31db",
+      "bytes": 3206,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/patch-genesis-menu-wait.py": {
+      "sha256": "9c721083a5c5b2baf42568f6874743ade49807a2b6dc36e180411f1311ae6588",
+      "bytes": 4479,
+      "mode": "100644"
+    },
+    "system/application-core/scripts/patch-watara-rom-load.py": {
+      "sha256": "d4e9f99d71abb4e0d4cfb6b80758b182fc24e1d157919744619d63596e09811b",
+      "bytes": 4613,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-animation.c": {
+      "sha256": "19ca4301d4b03f5d6f6dfb90131661a47147834b35fe6e7d5e7cbdb92d60d789",
+      "bytes": 9395,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-battery.c": {
+      "sha256": "4d38409f4231177bc6323903c9da9469aeda71545b977f47b126b2b34afd7331",
+      "bytes": 4858,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-card-guard.c": {
+      "sha256": "a305a0d78afd0636ce72b505ec03f74638f99458d69eb668d6f5322f87a17266",
+      "bytes": 6488,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-config-store.c": {
+      "sha256": "4cd599990abdb204a402352f75463578580ac1548ce73b91da1ae3373ba673f4",
+      "bytes": 22154,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-controls.c": {
+      "sha256": "61a167b4dfe35ba2cda54cb96ead380ebeb11d9dbf9c51805acff7138035ecab",
+      "bytes": 9571,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-credentials.h": {
+      "sha256": "7788a15c375cfc2ba5d374ac02329e8a3c8b7cc2fe5f452f138d0804d4936ef4",
+      "bytes": 2335,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-diagnostics.c": {
+      "sha256": "4fc6068c59672c1465995541785888ac4fd53edb9f2c821e28ab78045b3face9",
+      "bytes": 3517,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-display.c": {
+      "sha256": "743a4b1ff13db6237fee981b8be602626acca15560e371e55f1ae0341812ca65",
+      "bytes": 3039,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-error-receiver.h": {
+      "sha256": "15f06b25c9d4942878cd915b30846819bfc6d8e1df02d71f95c231de1fbc8512",
+      "bytes": 1033,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-events.c": {
+      "sha256": "5018823d22aeea1bdbebcfff77feef3b26bb2a76e435821a75bca2ed3c6dd86b",
+      "bytes": 7074,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-exec.c": {
+      "sha256": "1f6cc2297bd659a39dfb4a9aca740b4b45bb4adcfbcebed53836be688256b184",
+      "bytes": 8845,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-fps-gate.c": {
+      "sha256": "102cc8212f8cba2baa68563f5baaa9db115062f48696fb8ef7cd34f2a0967591",
+      "bytes": 8316,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-fps-launch.c": {
+      "sha256": "f03e71deedc0c4bdcf4353214b00b0b0b0c62f31f0eaed42d12dd8395eedfa67",
+      "bytes": 7174,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-fps.c": {
+      "sha256": "070cae564c6b2c7553bb02b44e9f7ed5816d6fdd293f6ced1e11408c4c14a91b",
+      "bytes": 11638,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-game-control.c": {
+      "sha256": "b6a53d983d6ffc62eb324c8a990fe717a98a774da01217030788391d14944ba6",
+      "bytes": 5878,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-game.c": {
+      "sha256": "853e7db0a42fecb743aff8dfb105af59e8537f26777957efbe3d17b2da5a438f",
+      "bytes": 8719,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-host.c": {
+      "sha256": "5807c1a3298dc0e90ff9197486efb5304bc84537c7850877358f0b1220ea51bd",
+      "bytes": 23718,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-identity.c": {
+      "sha256": "2b5cda3bdfac93e229b7f0d84dd4be7b5a23957990092e5fd1b70984f68b074d",
+      "bytes": 2549,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-idle.c": {
+      "sha256": "17a65301f02da4e31ac4804d2c3a9e0afa475f7773af2f7dbdd8b6f6fdc2969c",
+      "bytes": 3590,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-init.c": {
+      "sha256": "dd959e04398ee1a69c3eef2cd9d663fa2dcfc71fb433a3183a11e511f8168727",
+      "bytes": 1546,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-job.c": {
+      "sha256": "c2847e6fcbc995b1ca613c3a6639e97d29efd3c8674a42ad0a7ff22b8f25ab1a",
+      "bytes": 5213,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-launcher.c": {
+      "sha256": "c4b05d1c90853bf3641df584eb637ac3cb785c4cfce292d68cc1f589ab6af64b",
+      "bytes": 8942,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-lifecycle.c": {
+      "sha256": "91435efe5a9c144cc09f6c2bafd051e0fccdf09a3fc31b85d72d877297bb7494",
+      "bytes": 24527,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-loop.c": {
+      "sha256": "2da5052de864180b93d3f98ea954fc44d84494306a637c13e85b8c7661133551",
+      "bytes": 8623,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-management.c": {
+      "sha256": "47760213b7bd37d1b599e6f08aadb30a360db5f534808cb15fe13ed7413d733c",
+      "bytes": 16273,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-media.c": {
+      "sha256": "dc2f3631c36e230ac0d9b490562802aed1c87ee001bf0d30152c7b365ff69cac",
+      "bytes": 17453,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-menu-config.c": {
+      "sha256": "a905eb8d3b6001ce76ed85bc1a369372ed96fb901a5d5222ef0b262a809755f2",
+      "bytes": 13685,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-menu-launch.c": {
+      "sha256": "bf0c911540e78fb73240c56088ab4723a832900f29ed7d4b701de784b0b8972d",
+      "bytes": 4913,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-namespace.c": {
+      "sha256": "748440cc4cef7fff12ddede3b5e12c86f3e5df7358631f115ed7bb91e49f2088",
+      "bytes": 9900,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-payload.c": {
+      "sha256": "edcfc658c233a0ac782f9afb15ce3ab3afc1b713b09ce566d4060c6208841f50",
+      "bytes": 8193,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-pidfd.h": {
+      "sha256": "bcd2d525b7eb4cfe834bdb278c9d24d567ceffc6df9f362f6a2c3d55a61fa721",
+      "bytes": 2726,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-prepare.c": {
+      "sha256": "6cb36b8e3a58bd90d52f4dcdfdda67851f868b99df4b44b7a6724e10dcbb3d5e",
+      "bytes": 9295,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-profile.c": {
+      "sha256": "25796b2d099a21b0808f69a8183c0b8b85db0b9fe9085d2107673d4007035d71",
+      "bytes": 6045,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-ready.c": {
+      "sha256": "c339d250966ba3e8808d6e49e9ab7738e5fed2eb61d786683eafa2f05db04151",
+      "bytes": 5324,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-release.c": {
+      "sha256": "2e43a9a9baa450235d3e17f5ea6ea61198414b586b6afb1047aed4763ad3cfbd",
+      "bytes": 6029,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-session.c": {
+      "sha256": "c5de5b1775d4d2fe364d2271e7b6f544abfcc97b379d742ea501f6ce7be52160",
+      "bytes": 5938,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-settings.c": {
+      "sha256": "d8695b038ba5178288899b0ac536987bb983fbc7c5c2719a73fc4abbee103840",
+      "bytes": 6596,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-transfer.c": {
+      "sha256": "d00f0a36426b31733a091dc600f95b3edcd4c1f265039a9df955866ddbe52584",
+      "bytes": 8970,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-app-watch.c": {
+      "sha256": "9100eb8fe604d858dd893b9f98e486de75ccf87303a28f846b705ebb58b4ecd9",
+      "bytes": 6280,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-application-service.c": {
+      "sha256": "e199fbf2204d81377ae970ac817cbc94e4b02a759091c37ae5728c236a8c1e16",
+      "bytes": 84384,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-fps-present.c": {
+      "sha256": "6a5b94bc74a9b539552d3955da1e8e4a3b134e3bc1dcf7cd035b967425f83559",
+      "bytes": 6668,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-menu-config.c": {
+      "sha256": "7829ade713ca22cefaaecb80beef362891e9197b9aa2967abe93231d0fe97300",
+      "bytes": 1295,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-opk-plan.c": {
+      "sha256": "3cc6746e50e503ad54d544f3451f72bd317256b892374d75b1ea8c834f0af7e5",
+      "bytes": 8518,
+      "mode": "100644"
+    },
+    "system/application-core/source/gkd-sm-present.c": {
+      "sha256": "4c414043dfc998097d87d5c0da9fbdee9f4774fb7dbacc3886e8ef7324c5e5fe",
+      "bytes": 4082,
+      "mode": "100644"
+    },
+    "system/application-core/tests/animation_fixture.c": {
+      "sha256": "1bd103df655cc3e5f12649b3ef22d6b61e5e0a12e0eb6ff1be47235f19a6109d",
+      "bytes": 12174,
+      "mode": "100644"
+    },
+    "system/application-core/tests/application_network_fixture.sh": {
+      "sha256": "de7123ad17c5bffc0d9c845ce436f4fe41ace08a253725f34a0508560011a9ec",
+      "bytes": 11520,
+      "mode": "100644"
+    },
+    "system/application-core/tests/application_update_fixture.sh": {
+      "sha256": "4edb0e45807df59dbe6d107e1063e5d32ef823497e831667c8951cd954278a70",
+      "bytes": 11466,
+      "mode": "100755"
+    },
+    "system/application-core/tests/application_usb_fixture.sh": {
+      "sha256": "f64da9fa56a251f505ba592f7180e6ec60972173c50d892d295396908e00796a",
+      "bytes": 10132,
+      "mode": "100644"
+    },
+    "system/application-core/tests/battery_fixture.c": {
+      "sha256": "9f0989edd82682e760389ca4a4ac7dd12f388d89b5fbb4477c9fd39a301a8a97",
+      "bytes": 3764,
+      "mode": "100644"
+    },
+    "system/application-core/tests/build_init_probe.sh": {
+      "sha256": "1ee2501224d0c5a5084f5f5d6cd67ee168b1d01495ad1df9f021347656aec5c4",
+      "bytes": 1740,
+      "mode": "100644"
+    },
+    "system/application-core/tests/card_guard_fixture.c": {
+      "sha256": "5d89177d1c594624f7a51aa322501655b1e214d26427e3f874a6800010df7d99",
+      "bytes": 5600,
+      "mode": "100644"
+    },
+    "system/application-core/tests/config-native.config": {
+      "sha256": "b5250ea89b2a9de9a6e19340d2a8afc1cc3953016739f3dbc67a4548df169e93",
+      "bytes": 480,
+      "mode": "100644"
+    },
+    "system/application-core/tests/config_store_fixture.c": {
+      "sha256": "0489239e9de8675902b4be7077c0ac5f765769b48578ed1a25f3c0286c3229d3",
+      "bytes": 3005,
+      "mode": "100644"
+    },
+    "system/application-core/tests/controls_child_fixture.c": {
+      "sha256": "6d17ac219f395660d10f01d83fcf78ca0b0675e1c156db59e41da1cf50dd46f2",
+      "bytes": 2606,
+      "mode": "100644"
+    },
+    "system/application-core/tests/controls_lifecycle_fixture.c": {
+      "sha256": "120bd8c5b211bfe100dfa22f733815ccecd9c07ba405963544d5b26940421ad4",
+      "bytes": 2722,
+      "mode": "100644"
+    },
+    "system/application-core/tests/display_fixture.c": {
+      "sha256": "87b2d929fc3b9486352320b5c1ab8f9207699e981c2d1090eceed3cad96dc906",
+      "bytes": 7628,
+      "mode": "100644"
+    },
+    "system/application-core/tests/events_fixture.c": {
+      "sha256": "05764165b4f47acaf784703327995403689586edfafdd8d4e233e9db82756d1e",
+      "bytes": 4231,
+      "mode": "100644"
+    },
+    "system/application-core/tests/events_owner_fixture.c": {
+      "sha256": "acd809bb6afae5da17821e1d332663e77724e4f8dad9dfbd64d16d3d2c4f155e",
+      "bytes": 3935,
+      "mode": "100644"
+    },
+    "system/application-core/tests/exec_fixture.c": {
+      "sha256": "c3297b708a7409a16065560c6fc05734473bc1acbe0e5685f395777e002dcb15",
+      "bytes": 1555,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fb_ioctl_trace.c": {
+      "sha256": "75475c5b09c860c761b1bff7407b5d8fbfb5edb4b4857f5b68dcf0bb759a3890",
+      "bytes": 4628,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_authorize_probe.c": {
+      "sha256": "d94f8b59d1c0f56f4fe745b51ac4b1edd622fdac1340c76641de84cbec830474",
+      "bytes": 947,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_broker_fixture.c": {
+      "sha256": "b6581d74143553dfe6fbc400d5cefe6a5cbbd26f20dceeb8dc870d831cffcfc3",
+      "bytes": 8658,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_fake_sdl.c": {
+      "sha256": "2b7bda280757312e07d2f716a6f637fe2bd5b148a302d8907931ab028fa7af9d",
+      "bytes": 165,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_gate_probe.c": {
+      "sha256": "0e169a8be471b02df1a8ef16b708641c71ac6b9be919cefc88cacdfab16edc98",
+      "bytes": 600,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_launch_nonblock_fixture.c": {
+      "sha256": "0a88314e34c45404bde4e2ea52841d18d674e211a79cd922adbc54c279c2f02b",
+      "bytes": 4143,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_non_sdl.c": {
+      "sha256": "391d044beb5a06ec47ed7170add44a713f5926d1ad096084ec5d066cf378ccda",
+      "bytes": 560,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_present_fixture.c": {
+      "sha256": "183c1701d85cf4bfbac402e5ba0a0a8154cc44b36d87713e55c3243f83668430",
+      "bytes": 2899,
+      "mode": "100644"
+    },
+    "system/application-core/tests/fps_unrelated_preload.c": {
+      "sha256": "b25db0b75b63ff8cd2e398fae9852ae6d7093bb07cb72fb7c65dd65465935269",
+      "bytes": 135,
+      "mode": "100644"
+    },
+    "system/application-core/tests/game_fixture.c": {
+      "sha256": "263647a0622526804e4a3cac27ab86f257264fc767da060ace24fe809cbdca1e",
+      "bytes": 12440,
+      "mode": "100644"
+    },
+    "system/application-core/tests/host_service_app_fixture.c": {
+      "sha256": "46abfaa589cebfc5fb59ec2ce00f69ddc471696dba3f601ab07e050acbd26ffe",
+      "bytes": 1036,
+      "mode": "100644"
+    },
+    "system/application-core/tests/host_time_fixture.c": {
+      "sha256": "8e2978f83a1af48152819996640c7dd4899774b97d6f72410b73c93a09473671",
+      "bytes": 3385,
+      "mode": "100644"
+    },
+    "system/application-core/tests/identity_fixture.c": {
+      "sha256": "e3ecaf5ca7f91b57ab2d0e7bed69902b06d1b16622bebcd80fb3c409f3ad36e3",
+      "bytes": 2010,
+      "mode": "100644"
+    },
+    "system/application-core/tests/idle_fixture.c": {
+      "sha256": "884f2f1e305dca82399f638604ce87a95ddbe12209dab603ceaddade54da4a6e",
+      "bytes": 7357,
+      "mode": "100644"
+    },
+    "system/application-core/tests/init-native.config": {
+      "sha256": "e2587a820922cd6550569c2d25bb3b86541b4b746e539e40bba7367e6a862cfd",
+      "bytes": 194,
+      "mode": "100644"
+    },
+    "system/application-core/tests/init_fixture.c": {
+      "sha256": "b958686922a286036ce5cc9041d21d8451f123714b638dc2e6de089ff22e723a",
+      "bytes": 3052,
+      "mode": "100644"
+    },
+    "system/application-core/tests/init_image_fixture.c": {
+      "sha256": "3170b8f39384fad9e93b4f3cff93097f066f578c307350fd86d2cb67a2305ccc",
+      "bytes": 96,
+      "mode": "100644"
+    },
+    "system/application-core/tests/job_fixture.c": {
+      "sha256": "3d9d53dd8513255843868951f1c3a6b51596e93c8c5685cd558a52cc498c17d2",
+      "bytes": 3506,
+      "mode": "100644"
+    },
+    "system/application-core/tests/launcher_fixture.c": {
+      "sha256": "46a24b22e21ce4ee160dc4af4574009c376b71ab7dec43624cabeda70cf9d90d",
+      "bytes": 7408,
+      "mode": "100644"
+    },
+    "system/application-core/tests/lifecycle_fixture.c": {
+      "sha256": "7cfebf0ab0b3029ff3437879bd05c691087f0917be1dfb7c2d98511d44af72cf",
+      "bytes": 25650,
+      "mode": "100644"
+    },
+    "system/application-core/tests/management_fixture.c": {
+      "sha256": "c6f7ca2c5e7adaa4238690ac4449b1b8da6d5d7436a92eb88c91fc4a7fdf0c4c",
+      "bytes": 9808,
+      "mode": "100644"
+    },
+    "system/application-core/tests/media_fixture.c": {
+      "sha256": "e45f33d6b38f4c4c95a1285c1c2a8058cb98f7c57a7ce958f16d7d7e3f5deb70",
+      "bytes": 8721,
+      "mode": "100644"
+    },
+    "system/application-core/tests/media_namespace_fixture.c": {
+      "sha256": "d35ea36cb2779e4d9abd1023183f6623e4c64ed1d4efaea6e673580fcc6096b9",
+      "bytes": 7129,
+      "mode": "100644"
+    },
+    "system/application-core/tests/menu_config_fixture.c": {
+      "sha256": "1291e2f45aa02e7cfc37f205eeaa1059ba97c5e49e7abceb86fbcacc4283c832",
+      "bytes": 8303,
+      "mode": "100644"
+    },
+    "system/application-core/tests/menu_launch_fixture.c": {
+      "sha256": "ff962d86d4c595f67c4219c98e7e3d2419d090d16a75ea8e1d069858cc533f0b",
+      "bytes": 4293,
+      "mode": "100644"
+    },
+    "system/application-core/tests/opk_plan_probe.c": {
+      "sha256": "e7b3c63d5cb2ce3fcc300b9d15b7dd7900df2d08d98b54a2317983698a414fb2",
+      "bytes": 513,
+      "mode": "100644"
+    },
+    "system/application-core/tests/payload_fixture.c": {
+      "sha256": "2e3d3d70d7a423a81ecfe25fe1d7b4a6a4f6f99898efe7e8302dcbe0c2cf06a0",
+      "bytes": 3506,
+      "mode": "100644"
+    },
+    "system/application-core/tests/payload_probe.c": {
+      "sha256": "47444bbe875e7ace80e3e63c97bea8d21d9a4eb952e268df96a12908c75ac3b6",
+      "bytes": 1525,
+      "mode": "100644"
+    },
+    "system/application-core/tests/prepare_mount_fixture.c": {
+      "sha256": "57125f9ea3ca18f94820c2256109a7b068025dcabacb1418a5bf4abf28c8eb46",
+      "bytes": 3968,
+      "mode": "100644"
+    },
+    "system/application-core/tests/present_fixture.c": {
+      "sha256": "a62fbb787c5597faf2270f94be8663b9407db4c7bcbeafa1748410c0871a1d6d",
+      "bytes": 1603,
+      "mode": "100644"
+    },
+    "system/application-core/tests/profile_cleanup_fixture.c": {
+      "sha256": "5f891ac94a2398870b56584dc6ae706c6be028aa3f048bcf0d2255700aa066db",
+      "bytes": 1988,
+      "mode": "100644"
+    },
+    "system/application-core/tests/profile_mount_fixture.c": {
+      "sha256": "2ee5b7d17041cb000819a4f1f5e5bad65f7cab188fd72871f80a57c87fe1c038",
+      "bytes": 9380,
+      "mode": "100644"
+    },
+    "system/application-core/tests/profile_preload_fixture.c": {
+      "sha256": "c0c9976210c4d9a5c901dec84d152689a59e07cca160c5aa5d04481321574c74",
+      "bytes": 422,
+      "mode": "100644"
+    },
+    "system/application-core/tests/profile_target_fixture.c": {
+      "sha256": "e3fbdb676a8f625ec758cbff8980cc2eaaf49198f41a4604a957fcafbb5b13b7",
+      "bytes": 123,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_animation_tests.sh": {
+      "sha256": "e620ee0c2240833ff91f2f59afa042c7ed393b1ee5bbe5958ac0820cca7ff6e9",
+      "bytes": 1098,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_controls_tests.sh": {
+      "sha256": "82521bf9b517af399f415750f8b0ebdb6a81dbfffcbd2bb2f649a7b2ca5e050b",
+      "bytes": 840,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_diagnostics_tests.sh": {
+      "sha256": "550d0f74a07046eb329872b72b9d964ed7e0cc3317e7074c2b7cffd1e6a2ee57",
+      "bytes": 908,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_display_tests.sh": {
+      "sha256": "94e4234949e611e167b195ff6f6d8d1ed838da3be3e9e24e0db3afd75420810e",
+      "bytes": 788,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_events_owner_tests.py": {
+      "sha256": "13ed6ff94eb4d4f7d0f63fcda2ba322cb52ed92fa334fe0db3e5052078a3e691",
+      "bytes": 1501,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_exec_tests.sh": {
+      "sha256": "3b8a6e8fd740a44ca836b5fc71d3afc2fba2f8dea369ce66aa45c992fd59ebe0",
+      "bytes": 3190,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_fps_authorize_tests.py": {
+      "sha256": "116b1316500191492a648c412e72f67c4c6352d0959ad7cd808a31997f730eb4",
+      "bytes": 4991,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_fps_present_tests.py": {
+      "sha256": "9b5e3a3a29c831ca405fd9e51263e22899aa93fe31f1598bd30a40bff2110790",
+      "bytes": 7088,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_fps_tests.py": {
+      "sha256": "8c06f1b488be5f4312c6580a0d63205f80fc4d468e965c87ff93c474e93ea26a",
+      "bytes": 9467,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_init_image_tests.sh": {
+      "sha256": "31bf13dd034b909fa373081f3ea8f2afdb9feb61a365f25702256d05b76e9f0a",
+      "bytes": 1148,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_launcher_tests.py": {
+      "sha256": "6826f61f7c2a180bd2797a35feef22731902e21b6cc930695cf781b070e2deb9",
+      "bytes": 2312,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_loop_tests.sh": {
+      "sha256": "1205da79fd2d2f2ce7590d4417ab7a40cb721d75bbf84354a7fad2337c40ff22",
+      "bytes": 950,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_management_tests.sh": {
+      "sha256": "1ba0ccaa9aec171f6d1aa28c99a8fed44f0749196090d0fbfeed84f44f66fa7b",
+      "bytes": 3823,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_media_namespace_tests.py": {
+      "sha256": "41b69c0778d960f7fa656b6919ecbed57471ce8f9b972d33cb4903091b33c86b",
+      "bytes": 2493,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_menu_config_tests.py": {
+      "sha256": "1e5f20dba7e91d47965226467f2e39d74caedba1eca442c9a76de79155ef262a",
+      "bytes": 4744,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_opk_plan_tests.sh": {
+      "sha256": "2c775b20d5c951efb68921973d62fcea44912f097b63d6d26db2293560abcfb4",
+      "bytes": 1174,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_prepare_mount_tests.sh": {
+      "sha256": "ef9e39714acbb2d2411715e397b07be9ee593336c00d9714c563678a689352ff",
+      "bytes": 978,
+      "mode": "100755"
+    },
+    "system/application-core/tests/run_present_tests.sh": {
+      "sha256": "f216f449bb3984cec52f9daa4da2b25331aab4168cfdfed942adac389786d404",
+      "bytes": 1334,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_profile_tests.sh": {
+      "sha256": "b5a30bf2aeed86968692cd1b2ce5f215d467aaf2cfce24b752dd19b7e310eab3",
+      "bytes": 1684,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_service_tests.py": {
+      "sha256": "6ae71c817269aa979b8a4143f5945b49aaa4ed863346979d7563b1977d43a7b9",
+      "bytes": 4205,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_tests.sh": {
+      "sha256": "7f375df9d0409178bd545f6176b244dbb44234f0d975f2f9912d2d810e70cb39",
+      "bytes": 961,
+      "mode": "100644"
+    },
+    "system/application-core/tests/run_update_entry_test.py": {
+      "sha256": "57afcecb5682db629f9c174a06b4981952aee10c25f158f23530c3b39a7d1cca",
+      "bytes": 952,
+      "mode": "100644"
+    },
+    "system/application-core/tests/service_fixture.c": {
+      "sha256": "1b732ce0bed3413a9d716ffa63e68dd391a1dd2adf54e4f418c77b12f7843b86",
+      "bytes": 74790,
+      "mode": "100644"
+    },
+    "system/application-core/tests/session_child_fixture.c": {
+      "sha256": "bd48b0b4a7a56408501bc4d27e8ef04d413c4cab68bd7c596b6511d3e44e5a7b",
+      "bytes": 1261,
+      "mode": "100644"
+    },
+    "system/application-core/tests/session_fixture.c": {
+      "sha256": "869f33145fc184925dd7c813f10fd635c128c1b1e5b42975ce0b7ed351ae3e7b",
+      "bytes": 2503,
+      "mode": "100644"
+    },
+    "system/application-core/tests/settings_fixture.c": {
+      "sha256": "321d3d2cd42d371d6b8d8a85321b59a548173e8db9df93caac888fe07d81f40e",
+      "bytes": 3225,
+      "mode": "100644"
+    },
+    "system/application-core/tests/settings_save_fixture.c": {
+      "sha256": "dfe63bc842f711d2b6cf505a4e104b6a4e773565afd11595a5131a169118d617",
+      "bytes": 10235,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_capsule_commands.py": {
+      "sha256": "da3d90c40c950c65251636926d8176ea40f1fffad6193e300141c149bc77ac55",
+      "bytes": 5231,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_config_capsule.py": {
+      "sha256": "9c5e041298cb0fb27eb00030f7a02f91864f2adb591c48f69fcb9322cf2a6a35",
+      "bytes": 4491,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_config_store_ext3.sh": {
+      "sha256": "6c8fd8fa62374a67a583bcd2231c24ba47f21635030291c75d03cc6f1790b465",
+      "bytes": 8526,
+      "mode": "100755"
+    },
+    "system/application-core/tests/test_diagnostics.c": {
+      "sha256": "a6977d44dbddf08a1be5049e3973b9b0031fe67765782dd0b5ef6653e9de62db",
+      "bytes": 4267,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_exec.c": {
+      "sha256": "af4a2bcf85828adb721720c6dcfe98e5e378d4512e19d1d4e1e65b91e2b83b81",
+      "bytes": 5620,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_exec_report.c": {
+      "sha256": "7579b7ac1f8105535702afb7eb2f7fe231f49e64bea5f2741c3f603f3999cc9c",
+      "bytes": 7815,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_gkd_opk_plan.c": {
+      "sha256": "e72e31f26120371c55795cb7f4c5c4ce2661664fbe507ac43d294cd2302947f8",
+      "bytes": 12347,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_host_service_restart.py": {
+      "sha256": "3704b34223bdea58830e57288e20cf99bd566657f37f442ecdb03ad888a3f8ab",
+      "bytes": 11718,
+      "mode": "100755"
+    },
+    "system/application-core/tests/test_init_image.c": {
+      "sha256": "44d8f89f51cb5993a6d158b51b37c0c9e5e940952431c209259d483a5dc6c298",
+      "bytes": 5847,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_init_namespace.py": {
+      "sha256": "3ca5b0b1079dd445d35649eec44a4c0317d44f9462a310996b17ce0df7801625",
+      "bytes": 38064,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_loop.c": {
+      "sha256": "93a98d2d5e2165a4e4e17b15a88ab95c313c01a7b308acb1502fecdb221f27ac",
+      "bytes": 10610,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_manifest.py": {
+      "sha256": "f55d75a97246c3ba13bb7e584981691c5270e864685b7647e630183b12ed5dfc",
+      "bytes": 1486,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_minimal_host.py": {
+      "sha256": "4eaad28334d663609616c49ffe9c676e1ed2d96a50f0b379e1cdf829e51762e9",
+      "bytes": 9942,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_prepare.c": {
+      "sha256": "dd6db5c1106096a55537f9c38bdb4d3b842e7b8523d2b00d3030b02bef3f774b",
+      "bytes": 1320,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_present.c": {
+      "sha256": "1e36ced928184284d578939b7ad92753d37393f883af5d7ab1458a21af4e13e2",
+      "bytes": 3619,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_profile_mount.py": {
+      "sha256": "a8231e43afbfaced5037bf0fca13420e94e041a73bd2b9674032005c637e4b81",
+      "bytes": 3459,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_ready.c": {
+      "sha256": "5eb30c5850e55bf61fff71ff2992d36ed7a89c5bfb2711fa12d34466da45f3ba",
+      "bytes": 8822,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_release.c": {
+      "sha256": "6d3ae3f4d320a92813494548221e761276062cbb5cb220faabb143acb90c72db",
+      "bytes": 10838,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_schema_defaults.py": {
+      "sha256": "d598a6871c72cd93e6f33fa4d285f09a0f084fc365ce8576c4498131eab48c0e",
+      "bytes": 1725,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_transfer.c": {
+      "sha256": "a4bf08f7e9f3d1f8a053ad919b091b863f53789f290e7c585f5500c678c86357",
+      "bytes": 8677,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_usb_bootstrap.py": {
+      "sha256": "78bb6a24a7c04aaf1139b9d4e0c4fe3a3eedfc20a0dea45363186dd2b14d3013",
+      "bytes": 2038,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_watara_patch.py": {
+      "sha256": "3b6af0e6c9ef134600a6f89b646d33bdb969b463f57548dfe992f4742e99b139",
+      "bytes": 2349,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_watch.c": {
+      "sha256": "eff022604b186eeb3e79595c0bc619a3e0be26056bcf020ee86cf53950f8f147",
+      "bytes": 9960,
+      "mode": "100644"
+    },
+    "system/application-core/tests/test_watch_random.c": {
+      "sha256": "d02568b1cfbcbe0540b8e866ed6c3474b1a24496e074fd368b4dabb74ea73237",
+      "bytes": 1464,
+      "mode": "100644"
+    },
+    "system/application-core/tests/update_entry_fixture.c": {
+      "sha256": "f05ff4282f07d85d2e41dc5624cb3807fbac3b6a3bb578f2e9cee53fdad96201",
+      "bytes": 3017,
+      "mode": "100644"
+    },
+    "system/application-core/third_party/libopk-5cb5230/CMakeLists.txt": {
+      "sha256": "8736bd64a3360e348c2700309457b0162c94ee16d08c564e8f6504e2ee2ecb16",
+      "bytes": 2109,
+      "mode": "100644"
+    },
+    "system/application-core/third_party/libopk-5cb5230/UPSTREAM-PROVENANCE.md": {
+      "sha256": "b330187721359b0e3050717568aefc7ca76ac6749565754ef2e82d6b77a28755",
+      "bytes": 1220,
+      "mode": "100644"
+    },
+    "system/application-core/third_party/libopk-5cb5230/opk.h": {
+      "sha256": "711db06372ed688ed6b126803b296e46fa127a1d55ab69a45c224f04a829172e",
+      "bytes": 2041,
+      "mode": "100644"
+    },
+    "system/application-core/third_party/libopk-5cb5230/opkrun.c": {
+      "sha256": "546454aa4ab20fb31f013ec6020f2f49b4122e1ddecdc93aa8585d820f526933",
+      "bytes": 9272,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/scripts/build-dedicated-r.sh": {
+      "sha256": "5355e63aa8d36a1ecdb2b06e69365e9cf906d3d71ea9089a3b53680351ec14ef",
+      "bytes": 2769,
+      "mode": "100755"
+    },
+    "system/ar-boot-selector/scripts/build-selector.sh": {
+      "sha256": "59225f6c618c31866386a8ca4cd3f2c2f5144a70a0e44623ca5d24f66a8a6c8a",
+      "bytes": 2375,
+      "mode": "100755"
+    },
+    "system/ar-boot-selector/scripts/build_test_prefix.py": {
+      "sha256": "3d65c0a64b58bc2fdf47d84fa32f3a4c852678e87cbb1924f826fcbfaf547b3a",
+      "bytes": 7618,
+      "mode": "100755"
+    },
+    "system/ar-boot-selector/source/gkd-ar-selector.S": {
+      "sha256": "7557f5f08ab3eee218fa063b6c3416b1be314323e380ada795f1d3a1ec49b702",
+      "bytes": 1311,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/tests/test_ar_boot_selector.py": {
+      "sha256": "c5d386ab1f0e8b956856d0c53e0a5a7739fafc97999f054fb7478b4151ff13df",
+      "bytes": 3129,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/tests/test_dedicated_r_runtime.py": {
+      "sha256": "80b3906494386b8b6ccb5017044e20841cc998c0ea5529d0ebd14cdc43185ce9",
+      "bytes": 16751,
+      "mode": "100755"
+    },
+    "system/ar-boot-selector/tests/test_r_slot_capsule.py": {
+      "sha256": "f73261d72e76cdbd015eee62d17da65a37ab8789ac65b968e605373b26265217",
+      "bytes": 5839,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/tests/test_r_update_adapter.py": {
+      "sha256": "e61a2168143b378885f3653b821edd07b32a9159a8832ccaa3ec4abc82a92799",
+      "bytes": 4066,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/tests/test_writer_contract.ps1": {
+      "sha256": "43d727c76f1473b0fd684a31a5ecec7fe57215c90f390e81db3497f6c0923d6c",
+      "bytes": 1224,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/windows/invoke-ar-pre-p1-transaction.ps1": {
+      "sha256": "92dfb1f5cdb6b905e82960d0cbc675a15a753efd95a888146cb202749fd1050e",
+      "bytes": 12028,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/windows/invoke-minimal-a-preflight.ps1": {
+      "sha256": "ac18e6590f35b841a9ff200885d13965078e8542e5d2934a3384499cc7f1c43d",
+      "bytes": 4663,
+      "mode": "100644"
+    },
+    "system/ar-boot-selector/windows/test-transaction-identity.ps1": {
+      "sha256": "4d0440035005d171cfbec04a82297b1ec9e41c36c951ec6f60bdff23804d1d26",
+      "bytes": 1868,
+      "mode": "100644"
+    },
+    "system/config-core/device/S87gkd-config": {
+      "sha256": "1cede77937b6a3bf4ff052ee49bb1628a6e8ce21d4b209ec36a22d42c71757eb",
+      "bytes": 211,
+      "mode": "100755"
+    },
+    "system/config-core/device/gkd-config": {
+      "sha256": "af8a86e344399233d5414f55c56c9ea462731975dfc82213d13a4a92cb9e91c7",
+      "bytes": 12808,
+      "mode": "100755"
+    },
+    "system/config-core/device/gkd-config-merge.awk": {
+      "sha256": "3b27823dc19cbbf6da4d07eadbb54891d055774fbc2321d910c43f951e8028e8",
+      "bytes": 1093,
+      "mode": "100644"
+    },
+    "system/config-core/device/gkd-config-rename.c": {
+      "sha256": "2565543dd7f14cbebe42a3bb0a2288982dcc29b1dfa3a2ba760bceeca3c27d2d",
+      "bytes": 548,
+      "mode": "100644"
+    },
+    "system/config-core/profiles/dedicated-r.override.conf": {
+      "sha256": "8b2d64453b9e5c6b4fe4da1bf842c5e2a0be21b171bb2e1e812811a70acf7022",
+      "bytes": 179,
+      "mode": "100644"
+    },
+    "system/config-core/schema/gdkmini.schema": {
+      "sha256": "9effefd819b78cab5755bf2e2e47a2c75d693ab67e20aaf2c4b71c48e4411e79",
+      "bytes": 9347,
+      "mode": "100644"
+    },
+    "system/config-core/tests/fixtures/compatibility-gdkmini.conf": {
+      "sha256": "df673e14cc18370ed9d11d94f13049b0a78308a68e680308243ca0b31fc28f8e",
+      "bytes": 6129,
+      "mode": "100644"
+    },
+    "system/config-core/tests/test_config_core.py": {
+      "sha256": "2b9743395e05b870877a99052a05469d65f5f32f3d633d5a64eb7307c419055f",
+      "bytes": 15591,
+      "mode": "100755"
+    },
+    "system/gkd-card-writer/tests/test_package.py": {
+      "sha256": "e1be78207570d34560310e1453574fbd12a4e564ad8369f0b62be44a2774f8b0",
+      "bytes": 2385,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/tests/test_writer_ps51.ps1": {
+      "sha256": "1f4e1d459ef919d185060a0ace250017cfabe49ab5cd1fdc22651fdfc52150df",
+      "bytes": 944,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/tools/build_155100_sample.py": {
+      "sha256": "b27eeacf5b3116000245eda7050453e45e581978b182b884fd7eb4d85741e6cc",
+      "bytes": 4431,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/tools/build_synthetic.py": {
+      "sha256": "a35a27877d52b52c6b065aa34f78958f865b4ffd84c022e5f064bdcee5ede6fa",
+      "bytes": 2077,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/tools/verify_package.py": {
+      "sha256": "e7e8719b8cbd2bba62497eed3dd33267df016c75d05bf9bc3030bbdf0eae778d",
+      "bytes": 2354,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/trust-anchor.xml": {
+      "sha256": "b552155eeb5fd55cb699696957f52876e37a42fb436676fc43d9d089bf770ab8",
+      "bytes": 416,
+      "mode": "100644"
+    },
+    "system/gkd-card-writer/写入-GKD卡.ps1": {
+      "sha256": "2dc8fb3c0802eba59a7e8a2ad8226c979d07d66a282185d759f538f24b65642b",
+      "bytes": 10519,
+      "mode": "100644"
+    },
+    "system/rc33-charge-ics-auto/device/S97gkd-usb-internet-auto": {
+      "sha256": "349006334af212f57be15855545b852062f11a158bbc26f2c596137468618287",
+      "bytes": 1271,
+      "mode": "100755"
+    },
+    "system/rc33-charge-ics-auto/device/gkd-usb-internet-auto": {
+      "sha256": "b953e9fc6c0e3659f9d6b591194dd8c973dc950a4cfdc1fd7f6fa90bb55e9b3d",
+      "bytes": 11542,
+      "mode": "100755"
+    },
+    "system/rc33-charge-ics-auto/tests/test_static.py": {
+      "sha256": "a92d642404badc511666b7d63dee28bea2dfc39a4f27f4b4d79e8881138f37d9",
+      "bytes": 2750,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/scripts/build-bootstrap-c5.py": {
+      "sha256": "d4e8eafb270e960a645780db524dc52ef42058ddf4d2061ed6649bab709518a5",
+      "bytes": 9225,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-bootstrap-rollback-c5.py": {
+      "sha256": "9979d6fa2a782e46638f84ca5ef26fab4f5ef29460a742066ce2b6c27d9ea1c2",
+      "bytes": 4556,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-components.sh": {
+      "sha256": "ce739d88387885e9cb9225cf090de64bf6411e9e0bc2ee49f98d5cd58b80a9e7",
+      "bytes": 5021,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-kernel-candidate.sh": {
+      "sha256": "bf1d13a068ca2771e8d25055f705dc96db9001e0d8425ced047a28ab55b24781",
+      "bytes": 8005,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-kernel-slot.py": {
+      "sha256": "c0b006b3a59d03aac0b3b96e9d28e556af4ff7c2e8e39ecdce0e924af2ed1c40",
+      "bytes": 3528,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-p1-overlay.py": {
+      "sha256": "0defba11c0e0a239fbd63c5f8f5e615fb93efe2375ea8d5182609fbe553b2a05",
+      "bytes": 2909,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-recovery-capsule.py": {
+      "sha256": "7fabe8a02048bf9f52ba2fa5025158413fc752724defb4ecb31f4d74e8fcd92e",
+      "bytes": 28575,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/build-update-opk.sh": {
+      "sha256": "95e5adb823c29eaf4fa4886b8efd7b5b0acbeaedba75ccd7278cded511318146",
+      "bytes": 700,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/derive-update-supervisor.py": {
+      "sha256": "dd61742463545aec40161e56a976b822406f8d4c9c2ecf3ad384817e6332b7a4",
+      "bytes": 4861,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/generate-ram-runtime.py": {
+      "sha256": "26470acf530dc1a55b30fc1cc834ad4e0b0d33d6d6835b84343bf60c6cf83d6a",
+      "bytes": 1079,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/install-menu-entry.sh": {
+      "sha256": "0ef6859a464f4abb4a47c66e05544083ff6563d22ff469ceb9e6857c985c014a",
+      "bytes": 158,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/scripts/kernel_slot_common.py": {
+      "sha256": "5cb4ba2339e6744849d1fd39bdf14e016b0496bfe2ec032aa6a9150ad19e70ce",
+      "bytes": 1672,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/scripts/verify-kernel-slot.py": {
+      "sha256": "724885cf206d2b223908f738e512a56e9fbdf75492350aca5f5d94041d4d20f9",
+      "bytes": 3463,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/source/S88gkd-update-trial": {
+      "sha256": "2ef223b8ad89a1ea969998c2a2b26b1e1eeba39ecf001bc6da49b78960f1bf9b",
+      "bytes": 755,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/source/gkd-system-update": {
+      "sha256": "b072c75d0e24ded56911a8981aea4d980f19efa904649e8b64a41dddee7d9944",
+      "bytes": 1377,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/source/gkd-update-coordinator.c": {
+      "sha256": "1270b3f6709676acc77ca93a33fdb0c20b05a446086416b15752b9e433466649",
+      "bytes": 7149,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-engine.c": {
+      "sha256": "4756ebd417c9b4facef7e2e6d2c1eb0955cac268704c453e7743ab9c3d9fef82",
+      "bytes": 17998,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-journal.c": {
+      "sha256": "88a748517fcb19c49ffc47cf30b2b9eb6fa285355ea04c537d3c52d28771354d",
+      "bytes": 5762,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-journal.h": {
+      "sha256": "da45a779e21d0626e5a7e4683c7406dd0de788b61fc869a860cd96cd4fec29ac",
+      "bytes": 1514,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-prepare.c": {
+      "sha256": "6dab917936dc036e4460282004669defede120103266cfbaf0537d6fed225c3d",
+      "bytes": 12292,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-request-tool.c": {
+      "sha256": "aa8f8326e38cf517a34cf78cfb27be472abf18906c81092f9c3ed5698499d195",
+      "bytes": 1491,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-request.c": {
+      "sha256": "c2e68fd5403fd1c2451cb34a546ccccb663cf5dc7de8768439064e3d92667c2a",
+      "bytes": 5341,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-request.h": {
+      "sha256": "56de17652d338f8c1a0ec963476ae4d3745c1f68b6a74b71e735d9e34e426f39",
+      "bytes": 950,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-runtime.c": {
+      "sha256": "515ffb018d61c7d64a9ea33e741966338c3eceb2abe096c7993e3fc8c45f643d",
+      "bytes": 406,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-sha256.c": {
+      "sha256": "f435d80d2ad6e61d58b53243a0d2be795dc57ad42a779bc2c2c489458526e48c",
+      "bytes": 2769,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/source/gkd-update-sha256.h": {
+      "sha256": "97adde04b5e31f46dae24e7e820328a60445aeec556c66e5840d74e434bc915c",
+      "bytes": 411,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/tests/fixtures/system.ini": {
+      "sha256": "4da87b69442f2ee23f35172222431ef746f4785ad2039859447c6f63b7ff1814",
+      "bytes": 127,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/tests/run_coordinator_tests.sh": {
+      "sha256": "68967b7371b331e812a90b2cbef28ca46f5b16c0cb22ff9196b380d51802c359",
+      "bytes": 2220,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/run_device_engine_fixture.sh": {
+      "sha256": "8a377b608df78c72dd1b1f5e3553d50068abf150855d0bba43f95e546d3293b2",
+      "bytes": 1626,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/run_engine_tests.sh": {
+      "sha256": "54ec109979547ea24d1621afab223fb11ddae58174d5a4b4c8522c333ce1eb1c",
+      "bytes": 1697,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/run_journal_tests.sh": {
+      "sha256": "717864176c5e564649b7606670c56226d7c40caf3670f099fb6552430e353a6b",
+      "bytes": 1019,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/run_prepare_tests.sh": {
+      "sha256": "aa71fa2a30709de78ea61d34429f8638844ec982c00a769c09e8384d0874aadd",
+      "bytes": 2283,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/run_request_tests.sh": {
+      "sha256": "920dbae33e0f13c4b161f687a3f3c365512bec47ef095085dcd0a988422e02a8",
+      "bytes": 1026,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_coordinator.py": {
+      "sha256": "7db8e0e4c05247fa72b3ce7e6561f41943bec30621187c2df207d693bc5536ad",
+      "bytes": 4206,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_engine.py": {
+      "sha256": "af21b4a868f8e039c9a9939c35574e54cc68c584c9ab2f2d7ff863cd89088470",
+      "bytes": 8316,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_journal.c": {
+      "sha256": "5aedb936cf819cd5cc7d18c6ee3b302a20b2fddd0bc63bc429908b9d877b4665",
+      "bytes": 1585,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/tests/test_menu_entry.sh": {
+      "sha256": "1d6e0bc30e7f7fabd1761e4f444e31bcb324faea41dd64a6eaf96c4816432571",
+      "bytes": 846,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_package.py": {
+      "sha256": "7a32371a39546cbb59c331b348360fbdabef0ffb3968730707f2a3855798944c",
+      "bytes": 8073,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_ram_supervisor.sh": {
+      "sha256": "26c3d18d94a674f54c190fdbd5454d6a4eb60c7f1947ad6c9ffe92a0d101acd5",
+      "bytes": 2624,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tests/test_request.c": {
+      "sha256": "08e09bb2cb379d56f66d6e5acb521261faaf49a32037d309d114cfd35437e31e",
+      "bytes": 1807,
+      "mode": "100644"
+    },
+    "system/rc33-system-update/tools/build-package.py": {
+      "sha256": "fb35d3060ecfd6502bef260036326686f378b3e518bc850de48ccb8548aa7cd8",
+      "bytes": 5187,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tools/package.py": {
+      "sha256": "771fb89c0c599db99bd0c864b7a4c6b06b3c8ad84811c011d03e7b545de4a023",
+      "bytes": 8445,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tools/verify-package.py": {
+      "sha256": "6d4a01c8a046403ca8f6d54b147ff04d6451f50315c3515c280ca81db9dcf6b3",
+      "bytes": 509,
+      "mode": "100755"
+    },
+    "system/rc33-system-update/tools/xml_trust_to_pem.py": {
+      "sha256": "5094f83f03e33190deaea1a7d057d1404df904d634bbc2cc36c860e677360ada",
+      "bytes": 1294,
+      "mode": "100755"
+    },
+    "system/rc33-ui-status-layout/device/S89gkd-ui-layout": {
+      "sha256": "a99b250134f58df34cab39a330b3c23f737ec026bbbc2b7fd2fcbc4f604c9f86",
+      "bytes": 176,
+      "mode": "100755"
+    },
+    "system/rc33-ui-status-layout/device/config.sh": {
+      "sha256": "a19544cee3d9d0a54f2db249befa923b2af45c9714447a8e8d8eeccc413acf81",
+      "bytes": 1666,
+      "mode": "100755"
+    },
+    "system/rc33-ui-status-layout/device/gkd-ui-layout": {
+      "sha256": "d649b0a5757fb5e46475037525f9729beae088ba1799f80c58ea7bf14fa72a73",
+      "bytes": 1310,
+      "mode": "100755"
+    },
+    "system/rc33-ui-status-layout/source/gdkmini.conf.fragment": {
+      "sha256": "41212506a575d46e3a5d0c39efba77f72dc24920cc74dca97a4b2d9cf578fa72",
+      "bytes": 929,
+      "mode": "100644"
+    },
+    "system/rc33-ui-status-layout/tests/test_network_config.py": {
+      "sha256": "f9b9509aeea665e1bcc5dce46879da4ea83c93cd9f1822ce55f04e2f5cd8be8d",
+      "bytes": 2572,
+      "mode": "100755"
+    },
+    "system/rc33-ui-status-layout/tests/test_ui_layout.py": {
+      "sha256": "af245ebd2d414847ed81c8e20e275570b447a1b787846a46ea26422dd9d675df",
+      "bytes": 3126,
+      "mode": "100755"
+    },
+    "system/service-core/device/S88gkd-configd": {
+      "sha256": "456781e418383e9571d1d2c103a981a7d6cdbc806666612bcf72b7f25470111d",
+      "bytes": 518,
+      "mode": "100755"
+    },
+    "system/service-core/device/gkd-configd": {
+      "sha256": "dd73f9eea29f98fb7421ce57a0bec05f2b4b05c7af43b00f158b8a341854db48",
+      "bytes": 1848,
+      "mode": "100755"
+    },
+    "system/service-core/device/gkd-safe-point": {
+      "sha256": "816bad73f6ae3ba31bce21766bc2845b847322d4c48f30fabc9dd08aa99a7163",
+      "bytes": 918,
+      "mode": "100755"
+    },
+    "system/service-core/device/gkd-service": {
+      "sha256": "b3cc1f4a69615773ff24f3d19dcc4d9250b8c7a09d4a07e371ec570c86b85a6a",
+      "bytes": 7630,
+      "mode": "100755"
+    },
+    "system/service-core/registry/services.registry": {
+      "sha256": "055e2264cc8a2b053f9f3a09bd36a1c20100459a4c55f38f0e975902f6f81363",
+      "bytes": 1039,
+      "mode": "100644"
+    },
+    "system/service-core/scripts/build.sh": {
+      "sha256": "5a3a17ae4d64ad0d86838749cf9a6da3e174f322000347bcac7c06944fc538e3",
+      "bytes": 1366,
+      "mode": "100755"
+    },
+    "system/service-core/source/gkd-input-idle.c": {
+      "sha256": "cafa0c459c78cb92e077a598c1fe3d2c84eeae9d0593fcce66d02e4469f9d8c3",
+      "bytes": 1805,
+      "mode": "100644"
+    },
+    "system/service-core/source/gkd-pmic-poweroff.c": {
+      "sha256": "d371b4c7b5a530dfff39e05ccfb21658f5512b7dffc7ba01798e13604f75ca5c",
+      "bytes": 9730,
+      "mode": "100644"
+    },
+    "system/service-core/tests/test_service_core.py": {
+      "sha256": "b47440dc20abd8cf8c58d9c18cb41b0f29752426c206da58ba43a3775026ff46",
+      "bytes": 9706,
+      "mode": "100755"
+    },
+    "system/status-core/device/gkd-status": {
+      "sha256": "47bc14705f4fed42643324e800b6507308b295811483737d7e90263616af1839",
+      "bytes": 1779,
+      "mode": "100755"
+    },
+    "system/status-core/tests/test_status.py": {
+      "sha256": "93c407060421ce3b81e90e497f061b9bf107ea068262bc31d5823c85db3f372e",
+      "bytes": 2877,
+      "mode": "100755"
+    },
+    "system/ui-core/config/gdkmini-ui.defaults.conf": {
+      "sha256": "874d46896a27153298e7d5661c2eeecd2bf33cd617830901e8b6dc6061ece730",
+      "bytes": 763,
+      "mode": "100644"
+    },
+    "system/ui-core/device/S95gkd-input": {
+      "sha256": "e1e84da75b7b00b213f903bc7f6ea0da549dfd6f154a79df8016e41cb806aea2",
+      "bytes": 1570,
+      "mode": "100644"
+    },
+    "system/ui-core/device/gkd-controls-start": {
+      "sha256": "b99aa19c4da3524d3946ff8f67860927c48bc824afee6767e83191b10cdcca14",
+      "bytes": 2218,
+      "mode": "100755"
+    },
+    "system/ui-core/device/gkd-ui-menu-preview": {
+      "sha256": "8f77317c581bbf075872a8af148a2e049261258dda66f0eb5940b4eae47fe889",
+      "bytes": 540,
+      "mode": "100755"
+    },
+    "system/ui-core/include/gkd-boot-frame.h": {
+      "sha256": "670ba917d40645b0dd6d425c5eac62f3d847fcc7e372b43ccab60dd5ac25d1de",
+      "bytes": 1243,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-controls-hardware.h": {
+      "sha256": "baabc0cd04b6cdc5341dd8156c9c463b43d27fc3a944c27cf9db3fe994e8840d",
+      "bytes": 1026,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-controls-state.h": {
+      "sha256": "2d9b0aa2019ee35a2f96f5c49e757446654cd8e0a0477826841d8e690f107a39",
+      "bytes": 1774,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-hardware-state.h": {
+      "sha256": "57ec82f66d618ea70cb5ce905b837dbaec96e05176e61618ff2ec2d548644401",
+      "bytes": 340,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-input-keys.h": {
+      "sha256": "c847a1ad017a25b47431a61fefd21a84fcadb4564787594dde8c775b18befa6b",
+      "bytes": 979,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-input-owner.h": {
+      "sha256": "740a0168003a596ecb5d33e76c04156a4604b49e2626834af916e2bc0899b327",
+      "bytes": 1475,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-input-style.h": {
+      "sha256": "3bc9e744bebdf2d1a1f10ad0e5b28253a151b94d6b8f8f8ac5920447a6964098",
+      "bytes": 618,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-menu-guard.h": {
+      "sha256": "ecef7edbcbdfeac84946efdab21604291a730a265b023d317355e42289da9423",
+      "bytes": 765,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-menu-state.h": {
+      "sha256": "ac6d12db9e5df9e85a06cd2a4f4450c2fa7798bbcaf8dbe1a90c78646fe336b2",
+      "bytes": 1148,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-settings-client.h": {
+      "sha256": "aba1726577ff0cb83dad0c35019206e445f74876e69b8005f4468629c183eeb8",
+      "bytes": 287,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-settings-state.h": {
+      "sha256": "e0db3ec4267f79646f19fc9a9a862fb05200eb4d95b0d29631fb51d8bb39e806",
+      "bytes": 1041,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-settings-values.h": {
+      "sha256": "99e07f45bd71ddacf954f10bbba1021d38d70ad0dd55b618919451eab253a2e2",
+      "bytes": 897,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui-language.def": {
+      "sha256": "0a2b7623ee18509f47f6c64d0ff0160f74f68c31c46048e50f56d8c30b9ee57f",
+      "bytes": 2692,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui-language.h": {
+      "sha256": "01b36f7876cc324d317bc8ab52f99ca25090735a98da125766ece27a29721b1d",
+      "bytes": 705,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui-pixels.h": {
+      "sha256": "73b1648f2ca3faa1a2dfccbd9efff088f92bceb82d5cc16a703d9b2ebca01736",
+      "bytes": 1426,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui-plane-client.h": {
+      "sha256": "35fa1eff10ed17571977ca36a0682e57bb7cdcf0e9816c4ce2b46c73f595b9d5",
+      "bytes": 960,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui-plane.h": {
+      "sha256": "b9e08a4eb29d9e90933eee8b239070d65e6af6bff7777d2bd598e22e1e874622",
+      "bytes": 4222,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-ui.h": {
+      "sha256": "e40985c591bed7fe335caf010ac2851f34eacda4226e78512704ab71a72741e6",
+      "bytes": 6970,
+      "mode": "100644"
+    },
+    "system/ui-core/include/gkd-volume-curve.h": {
+      "sha256": "122aa58044e382c58233bf2c1e7d760c7190ea81ea90490732a418892c37f7d7",
+      "bytes": 646,
+      "mode": "100644"
+    },
+    "system/ui-core/scripts/build-controls.sh": {
+      "sha256": "584ffd3a6df8cb19f97369769b13ca774c55255c58e3baa65e1b2ec830277744",
+      "bytes": 4207,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build-host.sh": {
+      "sha256": "b43a7b87cc395620c4a90092d4811614f0e98676f8f2cebcef060fb4f448d834",
+      "bytes": 1488,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build-menu-controller.sh": {
+      "sha256": "adfec3779762992bb2bbfd2710181d572d2f3a44b5aa63498ac27d11e3a8ca48",
+      "bytes": 4464,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build-mips.sh": {
+      "sha256": "45735c7763bb12c1d85feffaa899418996cce4afa31260c0fe45d43641c66cff",
+      "bytes": 1726,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build-plane-client.sh": {
+      "sha256": "af8e613e48e4dceae52891415bc6e6b4a1ecb150eea5d552b1596a4ac9361523",
+      "bytes": 5147,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build-settings-preview.sh": {
+      "sha256": "8df90f6c92f16e002e280b630064a6f50522b805b84de71979853e62f33f4695",
+      "bytes": 2357,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/build.sh": {
+      "sha256": "cd7430db5a5e79a55738daf5ededec6e923d0c038dd873c37e06b4b934aab2c3",
+      "bytes": 3271,
+      "mode": "100755"
+    },
+    "system/ui-core/scripts/extract-wqy-subset.py": {
+      "sha256": "499c496a69bb17ddc3c37ffeba702b955a2ca9d5dcdcb3f713ffb23e5910f39f",
+      "bytes": 2833,
+      "mode": "100644"
+    },
+    "system/ui-core/scripts/generate-boot-art.py": {
+      "sha256": "aeb4fc5b6fbd770b49aa4e8750192893cf7daedcb7c1bddc5a8bfae9d07b865b",
+      "bytes": 3532,
+      "mode": "100644"
+    },
+    "system/ui-core/scripts/generate-cjk-psf2.py": {
+      "sha256": "1c7bc9c8b57cf8090c8356a6d826f7a30b3c952f6983e24d8524d08f4160c403",
+      "bytes": 1592,
+      "mode": "100644"
+    },
+    "system/ui-core/scripts/generate-psf2.py": {
+      "sha256": "859f50cfa16bc47ae502fd924d3ba3aa262c68cddd293f3fe2409d5626e5f27e",
+      "bytes": 1330,
+      "mode": "100755"
+    },
+    "system/ui-core/source/gkd-application-menu.c": {
+      "sha256": "1fea793a1c710a7ed54c9f14254e3482d32d23789c3c424ec5445bd3d7a97492",
+      "bytes": 18584,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-controls-hardware.c": {
+      "sha256": "af0c6612af03a48e1836f84760b244b5505ac57e670daeb23ee288bd50c403bf",
+      "bytes": 6989,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-controls-state.c": {
+      "sha256": "6eae4e69a0e4f20adb025179aba2227a1b4862cc43455db7d278ac1a17ca5abe",
+      "bytes": 6900,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-controls.c": {
+      "sha256": "e6c1a1f164007965e4749e36bda91f37c21739543d25c7ff4de580baf43a4cf7",
+      "bytes": 25910,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-hardware-state.c": {
+      "sha256": "0e81024e9711b5679b731caba78f122c43e52f1c469598fe114a728e497eac2a",
+      "bytes": 5178,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-input-owner.c": {
+      "sha256": "e6adadd22619ec06c8af0745611d1df7be13d3c20997f9873e41f3df7d251d29",
+      "bytes": 11695,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-input.c": {
+      "sha256": "03a167a38df25cdf0550caa43402ef13cfec73605d661b32485c3afaf37f261e",
+      "bytes": 29426,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-menu-guard.c": {
+      "sha256": "af4feda0536b8f2496bbe9db04d41aa675fc3bff6f3bec29f4f3b6dbe0741682",
+      "bytes": 6128,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-menu-state.c": {
+      "sha256": "a9fc72526f297e58fdd97f6cab17adcbf9d50637c096b747f094af06fe772dc5",
+      "bytes": 2321,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-r-poweroff.c": {
+      "sha256": "1411d813ecac92aff5c7f1da0a523567da4236bc341d54b3e4a9cfa68dafe5ad",
+      "bytes": 4126,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-recovery-ui.c": {
+      "sha256": "619253db673bbb769280670441496361836ca669ff785e36d4b0c5d3ad8ce307",
+      "bytes": 14716,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-screenshot.c": {
+      "sha256": "9cc01952ee9572020f584bdcaa2a6299292352ab735ec71368f9f804671b2383",
+      "bytes": 33200,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-settings-client.c": {
+      "sha256": "99680e3e993680442e1a9aa6add323ee75d72dafc2824efdecbbbc739268e077",
+      "bytes": 1415,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-settings-state.c": {
+      "sha256": "1ecee90e399e05e0aac4f22c4826f7e6d0b4c8442fdd3a29324e5180dc00cb66",
+      "bytes": 1901,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-ui-language.c": {
+      "sha256": "c2c7bc104437533402f97d8c00080015d5038170a3f9857969d96c7fb4f90075",
+      "bytes": 3729,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-ui-menu-probe.c": {
+      "sha256": "68da16c3d461de0248d9f0240edb4f5e6c542f70ad5e7831b2e9ecb16d7836e9",
+      "bytes": 3807,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-ui-plane-client.c": {
+      "sha256": "7cbd6529ba6f45b37ca75bd36c9ece49a7779d1966deeebfd4ee9785633ac3c5",
+      "bytes": 4205,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-ui-plane-probe.c": {
+      "sha256": "eb862d55f0d7ed38d623876bedc38f64c3e07d204cc5995e7c72137176f3cf31",
+      "bytes": 3495,
+      "mode": "100644"
+    },
+    "system/ui-core/source/gkd-ui.c": {
+      "sha256": "a2b1654539a0bcd8e11dac4d96ef660b6795eeb31ee260379fd4b689af429ccd",
+      "bytes": 54870,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/a_ui_fixture.c": {
+      "sha256": "6a212189bad9f3d5a59fc361eba7037a07543260c8e79def2950fd0c9f5c1b79",
+      "bytes": 1797,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/application_menu_fixture.c": {
+      "sha256": "2f21affd7ac0ec265d7efedd2f6d905c75270f9ec1300a202ee56269a0a608c5",
+      "bytes": 16948,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/application_screenshot_fixture.c": {
+      "sha256": "aac5921dd55bf7757d4ef5f03f9549b3d725177dc83ca02d9bcb30d076239551",
+      "bytes": 8824,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/catalog_fixture.c": {
+      "sha256": "56d2a2cdc731d284a08f4cd1c515d3446d6ae42f65f4b0a880a211ac1644cccd",
+      "bytes": 2405,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/confirmation_info_fixture.c": {
+      "sha256": "dfdb0f1828966c69d105212f1f99fd806a15d74f622aa7fbaea2931832d7fb41",
+      "bytes": 5525,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/controls_hardware_fixture.c": {
+      "sha256": "287a626c07be727bf293899f14dbf722808b50b67d9f066b264b84f421ce3bb7",
+      "bytes": 9257,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/controls_runner_fixture.c": {
+      "sha256": "714978092f9e9f9f513688e7dab3b88d5aa330cdfe465213a667be4c8bf2e39a",
+      "bytes": 21452,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/controls_state_fixture.c": {
+      "sha256": "d196f29cc357f4f384b3eabaf3a69147b66440753b5b0946ea52ae467b56e3d4",
+      "bytes": 9007,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/hardware_state_fixture.c": {
+      "sha256": "d64633e177721f0a984d230d48bedf93f266ae6ac7be2f22e57080aa29a93017",
+      "bytes": 5214,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/input_owner_menu_fixture.c": {
+      "sha256": "59b19634668b3c7b601a1270e43c4da5db4e2cc25426a476a8383371c22e33a5",
+      "bytes": 9852,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/input_owner_timeout_fixture.c": {
+      "sha256": "2b126e91af6e65b098fb84cc87fa6a56a0bbb37bfb5ce6c1034ba68ab422b70e",
+      "bytes": 1934,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/menu_client_fixture.c": {
+      "sha256": "bd142c9b6cd9034c8738a40a8611b355ba827078dcad0342e8fa3b9dc89dd87f",
+      "bytes": 4906,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/menu_guard_fixture.c": {
+      "sha256": "c23aa7f1658176824cab049653892bca94d2a8633a6c54e97d6aafa2362183ec",
+      "bytes": 4809,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/menu_probe_fixture.c": {
+      "sha256": "a812522b5549826beac6c0d423bb76e0cfcdf1dc50ce29e55d609447a800de46",
+      "bytes": 4550,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/menu_state_fixture.c": {
+      "sha256": "248150f0120affb90f537b79554523b147b071feb061c0ddbd582c8e2db03a1d",
+      "bytes": 2775,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/native_font_fixture.c": {
+      "sha256": "d054f64b49a1c6674a10778c85093cbe29767cb09c32f8c38f3c15189c03fe72",
+      "bytes": 3957,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/osd_benchmark.c": {
+      "sha256": "dce3edefbe70b901346843ac98821fb79e9b685ae1557b4446104fc36fdb6e97",
+      "bytes": 2564,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/osd_export_fixture.c": {
+      "sha256": "de213faaaa137adb580a5fd936e1efc06042f178c115292225329811e90edb53",
+      "bytes": 5536,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/plane_client_fixture.c": {
+      "sha256": "54fc811050c28ec267afcdd842ea48efa869bfac6cfdebadd0b3cff58c463eaf",
+      "bytes": 3987,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/recovery_wait_fixture.c": {
+      "sha256": "9ec424761869e23731762aa2f74a1b2990825db56050a53985309f7327eb4ebb",
+      "bytes": 3829,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/renderer_contract_fixture.c": {
+      "sha256": "990c2d957130a4c59135a8d49fd5b1aee2e689bdb71db514e0760a00d379d53f",
+      "bytes": 9961,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/run_application_screenshot_tests.py": {
+      "sha256": "59e8e148e0b967daf7edc7ec5b09edab56b594677cb660928e94529ec7bc1c34",
+      "bytes": 1613,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/run_boot_tests.sh": {
+      "sha256": "3a5c26dd7463344310bd232eaf1d8cc8cdf9090f37d47bceca3cb986d652968a",
+      "bytes": 765,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/run_power_tests.sh": {
+      "sha256": "39f39df4c1cd2376ab67c1b51cac8a658f93750b6f7bb5653df71acb419a527c",
+      "bytes": 266,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/run_recovery_wait_tests.py": {
+      "sha256": "c161e1d1d8faba80ee18e90ba0e63aeca8b9b901375e9ec6459a1355010b343b",
+      "bytes": 1291,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/run_ui_core_tests.sh": {
+      "sha256": "065dc929f8fdfa653e79012560b28db63d183367bafcf8f8d40ead246b9a692f",
+      "bytes": 641,
+      "mode": "100755"
+    },
+    "system/ui-core/tests/settings_client_fixture.c": {
+      "sha256": "eeefbc6630d3eabd58296170ac0f965d5a5abc0b57d582afab197abe63618266",
+      "bytes": 2064,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/settings_render_fixture.c": {
+      "sha256": "1c0696468d467423380b603585438543bcaeeb31e66f0c39bcc1fa3e9387a61b",
+      "bytes": 11343,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/settings_state_fixture.c": {
+      "sha256": "64b111f977e2ab5fd41d7c8bcd0449813b43d64a8804a4aea867c1d3c917258a",
+      "bytes": 5232,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_boot_frame.py": {
+      "sha256": "ef29189c31f01221a68075240436627e3b4fa9d4046110d084f0f15a6b277ad0",
+      "bytes": 2353,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_controls_launcher.py": {
+      "sha256": "14daca61446ae12e5a360afa42b0b274e565d667e4f0bf7865b986e5ffdb797e",
+      "bytes": 4151,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_menu_preview.py": {
+      "sha256": "b6c45d2ec50d045f264b744ecf373936bc6aef2a143c2a99083c66bffd45f3bd",
+      "bytes": 3330,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_r_poweroff.c": {
+      "sha256": "b4df06212a265c28aac97ae31b221f8465f6341e3e962e9d6bc504ccc6493c14",
+      "bytes": 1698,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_r_poweroff.py": {
+      "sha256": "5dbfc3d43f95dfaa4e254a10ea3ebcc418c29a57bdc50a7ddeca8975f054c0f9",
+      "bytes": 2839,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_recovery_usb.sh": {
+      "sha256": "ce8223dc4f921c0a0e9db3ebda0c923bf74d7e11de6593f5652de5c28494c629",
+      "bytes": 3484,
+      "mode": "100755"
+    },
+    "system/ui-core/tests/test_settings_font.py": {
+      "sha256": "becf8fc55e06b22a806f3b2d36a274cd8641b67ad2476a58f4dd46123966762b",
+      "bytes": 1293,
+      "mode": "100644"
+    },
+    "system/ui-core/tests/test_ui_core.py": {
+      "sha256": "c9fe093e32891e09f7e31494f9789d364467ef17f4d0e039dd71c48c1d07d61d",
+      "bytes": 20753,
+      "mode": "100644"
+    },
+    "system/ui-core/third_party/wenquanyi/LICENSE.txt": {
+      "sha256": "9d3ce3256bf0ef1ba1ff7f4cb57aab5b928b1a32bae6af34a2fbfbc566b02204",
+      "bytes": 18839,
+      "mode": "100644"
+    },
+    "system/ui-core/third_party/wenquanyi/SOURCE.json": {
+      "sha256": "42c96c83e7e9615bb9f313f3c9ec5e545fe090f721f026edc9e2f6e8d8f0a9ad",
+      "bytes": 1262,
+      "mode": "100644"
+    },
+    "system/ui-core/third_party/wenquanyi/native-cn-12.hex": {
+      "sha256": "153219b93f7c9d3012fe85f038f1af7c2b280bd6ca2ff71485ca247ba021a565",
+      "bytes": 4050,
+      "mode": "100644"
+    },
+    "system/ui-core/third_party/wenquanyi/native-cn-14.hex": {
+      "sha256": "38390a9c5535f9ba3cf6dc2003aeed29d35630fa9dc8f4d2bb1557c249d02711",
+      "bytes": 4650,
+      "mode": "100644"
+    },
+    "tools/gkd-build-all": {
+      "sha256": "2c5803479a3d9f880f51d14b2ff749c758ec05b5495e818a6284cb903964bf98",
+      "bytes": 278,
+      "mode": "100755"
+    },
+    "tools/gkd-build-release.py": {
+      "sha256": "934274744002bee49032d9f58fdd14043b80bd2d83feba8c0b2f6282a12032aa",
+      "bytes": 4013,
+      "mode": "100644"
+    },
+    "tools/gkd-release-identity.py": {
+      "sha256": "e0b5a514486b21931094b14894a6e7780467d01fb9f07139c1285fe115e5e538",
+      "bytes": 3740,
+      "mode": "100755"
+    },
+    "tools/gkd-source-closure.py": {
+      "sha256": "ce14038fd813c32a6761f50a4f316683736be7b58047c20386bae4af2a5f3ee9",
+      "bytes": 2175,
+      "mode": "100755"
+    },
+    "tools/gkd-test-all": {
+      "sha256": "c6b7d980c8884e6ee8da881bf78908a6210b995c48b762891e232f6e003ed661",
+      "bytes": 3182,
+      "mode": "100755"
+    },
+    "tools/tests/test_source_closure.py": {
+      "sha256": "6b2be6f3ec63ec44afc77c1ddfbcc34694b8aefb2249ae78c03885f53babff8b",
+      "bytes": 1358,
+      "mode": "100755"
+    },
+    "validate_release.py": {
+      "sha256": "697a37fa6fc0b54dfaebdf4f56e00028ec7250747a45e273343723fa3e57b370",
+      "bytes": 1406,
+      "mode": "100644"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+#!/bin/sh
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+VERSION_FILE=${GKD_VERSION_FILE:-/etc/gkd-mini/release-version}
+RUNTIME_ID_FILE=${GKD_RUNTIME_ID_FILE:-/etc/gkd-mini/runtime-id}
+KERNEL_RELEASE_FILE=${GKD_KERNEL_RELEASE_FILE:-}
+CONFIG_CMD=${GKD_CONFIG_CMD:-/usr/sbin/gkd-config}
+SERVICE_CMD=${GKD_SERVICE_CMD:-/usr/sbin/gkd-service}
+UDC_ROOT=${GKD_UDC_ROOT:-/sys/class/udc}
+NETWORK_INTERFACE=${GKD_NETWORK_INTERFACE:-usb0}
+UPDATE_STATE_DIR=${GKD_UPDATE_STATE_DIR:-/run/gkd-update}
+
+first_or_unknown()
+{
+	if [ -r "$1" ]; then
+		sed -n '1p' "$1"
+	else
+		printf 'unknown\n'
+	fi
+}
+
+printf 'version=%s\n' "$(first_or_unknown "$VERSION_FILE")"
+printf 'runtime_id=%s\n' "$(first_or_unknown "$RUNTIME_ID_FILE")"
+if [ -n "$KERNEL_RELEASE_FILE" ]; then
+	kernel=$(first_or_unknown "$KERNEL_RELEASE_FILE")
+else
+	kernel=$(uname -r 2>/dev/null || printf unknown)
+fi
+printf 'kernel=%s\n' "$kernel"
+
+printf '[configuration]\n'
+"$CONFIG_CMD" status 2>&1 || true
+
+printf '[services]\n'
+"$SERVICE_CMD" status 2>&1 || true
+
+printf '[usb]\n'
+found=0
+for state in "$UDC_ROOT"/*/state; do
+	[ -r "$state" ] || continue
+	found=1
+	printf '%s=%s\n' "$(basename "$(dirname "$state")")" "$(sed -n '1p' "$state")"
+done
+[ "$found" -eq 1 ] || printf 'udc=unavailable\n'
+
+printf '[network]\n'
+if command -v ip >/dev/null 2>&1; then
+	ip -brief address show dev "$NETWORK_INTERFACE" 2>/dev/null ||
+		printf '%s=unavailable\n' "$NETWORK_INTERFACE"
+else
+	printf '%s=ip-command-unavailable\n' "$NETWORK_INTERFACE"
+fi
+
+printf '[update]\n'
+if [ -d "$UPDATE_STATE_DIR" ]; then
+	for file in "$UPDATE_STATE_DIR"/status "$UPDATE_STATE_DIR"/last-result; do
+		[ -r "$file" ] || continue
+		printf '%s=' "$(basename "$file")"
+		tr '\n' ' ' <"$file"
+		printf '\n'
+	done
+else
+	printf 'state=idle\n'
+fi

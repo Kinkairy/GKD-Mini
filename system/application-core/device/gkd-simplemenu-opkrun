@@ -1,0 +1,552 @@
+#!/bin/sh
+# Round58 runtime launcher. One invocation owns exactly one vendor-opkrun
+# process group, active-game publication, bounded hardware telemetry, cleanup,
+# and the unmodified emulator exit status.
+
+proxy_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+real_opkrun=/usr/bin/opkrun
+setsid_command=${GKD_ROUND43_SETSID:-/usr/bin/setsid}
+probe_script=${GKD_ROUND48_PROBE_SCRIPT:-${GKD_ROUND43_PROBE_SCRIPT:-$proxy_dir/round43-runtime-probe.sh}}
+compat_library=$proxy_dir/libgkd-platform-compat.so
+active_game_dir=${GKD_ACTIVE_GAME_DIR:-/var/run/gkd-mini}
+round61_config=$proxy_dir/config/round61-performance.conf
+round61_user_config=${GKD_ROUND61_CONFIG:-/media/data/local/home/.simplemenu/round61-performance.conf}
+round61_profile_helper=$proxy_dir/scripts/round61-profile-control
+runtime_dir_requested=${GKD_ROUND48_RUNTIME_DIR:-${GKD_ROUND43_RUNTIME_DIR:-/var/run/gkd-mini/round48-runtime-recovery}}
+proc_root=${GKD_ROUND43_PROC_ROOT:-/proc}
+
+round62_sidecar=$active_game_dir/active-game.trace
+round62_end_file=
+round62_sidecar_tmp=$round62_sidecar.$$
+round62_end_tmp=$round62_end_file.$$
+round62_trace_log=${GKD_ROUND62_TRACE_LOG:-/media/data/local/home/gkd-round62-trace.log}
+round62_boot_id=${GKD_ROUND62_BOOT_ID:-}
+round62_menu_pid=${GKD_ROUND62_MENU_PID:-}
+round62_menu_starttime=${GKD_ROUND62_MENU_STARTTIME:-}
+round62_menu_exe=${GKD_ROUND62_MENU_EXE:-}
+round62_publisher_pid=$$
+round62_publisher_starttime=
+round62_run_id=
+round62_trace_status=disabled
+
+round62_strict_boot_id()
+{
+	round62_value=$1
+	case "$round62_value" in
+		????????-????-????-????-????????????) ;;
+		*) return 1 ;;
+	esac
+	case "$round62_value" in *[!0-9a-f-]*) return 1 ;; esac
+	test -r /proc/sys/kernel/random/boot_id || return 1
+	IFS= read -r round62_kernel_boot </proc/sys/kernel/random/boot_id || return 1
+	test "$round62_value" = "$round62_kernel_boot"
+}
+
+round62_proc_identity()
+{
+	round62_identity_pid=$1
+	round62_identity_tail=$(sed 's/.*) //' "$proc_root/$round62_identity_pid/stat" 2>/dev/null) || return 1
+	set -- $round62_identity_tail
+	test "$#" -ge 20 || return 1
+	round62_identity_ppid=$2
+	round62_identity_pgid=$3
+	round62_identity_sid=$4
+	shift 19
+	round62_identity_starttime=$1
+	case "$round62_identity_pid:$round62_identity_ppid:$round62_identity_pgid:$round62_identity_sid:$round62_identity_starttime" in
+		*[!0-9:]*) return 1 ;;
+	esac
+	return 0
+}
+
+round62_trace_emit()
+{
+	test "$round62_trace_status" = enabled || return 0
+	round62_size=$(wc -c <"$round62_trace_log" 2>/dev/null || printf 0)
+	case "$round62_size" in ''|*[!0-9]*) return 0 ;; esac
+	test "$round62_size" -le 262144 || return 0
+	printf '%s\n' "$1" >>"$round62_trace_log" 2>/dev/null || :
+}
+
+if round62_strict_boot_id "$round62_boot_id" &&
+	round62_proc_identity "$round62_publisher_pid"; then
+	round62_publisher_starttime=$round62_identity_starttime
+	round62_run_id=$round62_publisher_pid-$round62_publisher_starttime
+	round62_end_file=$active_game_dir/round62-end.$round62_run_id
+	round62_end_tmp=$round62_end_file.$$
+	if round62_proc_identity "$round62_menu_pid" &&
+		test "$round62_identity_starttime" = "$round62_menu_starttime" &&
+		test "$(readlink "$proc_root/$round62_menu_pid/exe" 2>/dev/null || :)" = "$round62_menu_exe"; then
+		round62_trace_status=enabled
+	fi
+fi
+
+
+case "$real_opkrun" in
+	/*) ;;
+	*) printf '%s\n' 'Round43 opkrun proxy: real opkrun must be absolute' >&2; exit 126 ;;
+esac
+case "$setsid_command" in
+	/*) ;;
+	*) printf '%s\n' 'Round43 opkrun proxy: setsid must be absolute' >&2; exit 126 ;;
+esac
+test -x "$real_opkrun" || {
+	printf '%s\n' "Round43 opkrun proxy: real opkrun is not executable: $real_opkrun" >&2
+	exit 127
+}
+case "$real_opkrun" in
+	"$proxy_dir/opkrun"|"$0")
+		printf '%s\n' 'Round44 opkrun proxy: refusing recursive launcher target' >&2
+		exit 126
+		;;
+esac
+test -x "$setsid_command" || {
+	printf '%s\n' "Round43 opkrun proxy: setsid is not executable: $setsid_command" >&2
+	exit 126
+}
+
+opk_path=${1:-}
+opk=${opk_path##*/}
+case "$opk" in
+	[Ff][Bb][Aa]*.opk|[Ff][Bb][Nn]*.opk) opk_class=fba; emulator_class=fba ;;
+	[Ff][Cc][Ee][Uu][Xx]*.opk) opk_class=non-fba; emulator_class=fceux ;;
+	*) opk_class=non-fba; emulator_class=other ;;
+esac
+
+
+round61_config_value()
+{
+	round61_key=$1
+	round61_file=$2
+	test -r "$round61_file" || return 1
+	awk -F= -v wanted="$round61_key" '
+		$0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/ { next }
+		{
+			name=$1
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+		}
+		name == wanted { count++; value=$2 }
+		END {
+			if (count != 1) exit 1
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+			print value
+		}' "$round61_file"
+}
+
+round61_validate_config()
+{
+	round61_file=$1
+	test -r "$round61_file" || return 1
+	awk -F= '
+		$0 ~ /^[[:space:]]*#/ || $0 ~ /^[[:space:]]*$/ { next }
+		NF != 2 { invalid=1; next }
+		{
+			key=$1
+			value=$2
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+			gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+			if (key != "runtime_probe" && key != "compat_trace" &&
+			    key != "audio_profile") {
+				invalid=1
+				next
+			}
+			if (key == "audio_profile" && value !~ /^(legacy|balanced|performance|custom)$/) invalid=1
+			if ((key == "runtime_probe" || key == "compat_trace") && value !~ /^(0|1)$/) invalid=1
+			count[key]++
+		}
+		END {
+			if (invalid || count["runtime_probe"] != 1 || count["compat_trace"] != 1 ||
+			    count["audio_profile"] != 1) exit 1
+		}' "$round61_file"
+}
+
+round61_selected_config=$round61_user_config
+round61_validate_config "$round61_selected_config" 2>/dev/null || round61_selected_config=$round61_config
+round61_validate_config "$round61_selected_config" 2>/dev/null || round61_selected_config=/dev/null
+round61_audio_profile=$(round61_config_value audio_profile "$round61_selected_config" 2>/dev/null || printf balanced)
+case "$round61_audio_profile" in legacy|balanced|performance|custom) ;;
+	*) round61_audio_profile=balanced ;;
+esac
+round61_probe_default=$(round61_config_value runtime_probe "$round61_selected_config" 2>/dev/null || printf 0)
+case "$round61_probe_default" in 0|1) ;;
+	*) round61_probe_default=0 ;;
+esac
+round61_trace_default=$(round61_config_value compat_trace "$round61_selected_config" 2>/dev/null || printf 0)
+case "$round61_trace_default" in 0|1) ;;
+	*) round61_trace_default=0 ;;
+esac
+
+# Remove all GKD launch libraries, including duplicates and inherited menu OSD.
+# Preserve unrelated preloads in their original order.
+preload_original=${LD_PRELOAD-}
+clean_preload=
+old_ifs=$IFS
+IFS=' :'
+for preload in ${LD_PRELOAD-}; do
+	case "$preload" in
+		*/libgkd-sidekeys.so|libgkd-sidekeys.so|\
+		*/libgkd-volume-osd.so|libgkd-volume-osd.so|\
+		*/libgkd-platform-compat.so|libgkd-platform-compat.so) ;;
+		*)
+			if test -z "$clean_preload"; then
+				clean_preload=$preload
+			else
+				clean_preload=$clean_preload:$preload
+			fi
+			;;
+	esac
+done
+IFS=$old_ifs
+
+requested_mode=${GKD_ROUND48_PRELOAD_MODE-${GKD_ROUND43_PRELOAD_MODE-}}
+if test -z "$requested_mode"; then
+	preload_mode_requested=default
+	case "$opk_class" in
+		fba) preload_mode=none ;;
+		non-fba) preload_mode=compat ;;
+	esac
+else
+	preload_mode_requested=$requested_mode
+	case "$requested_mode" in
+		none|compat) preload_mode=$requested_mode ;;
+	*)
+		printf '%s\n' 'Round43 opkrun proxy: GKD_ROUND43_PRELOAD_MODE must be none or compat' >&2
+		exit 64
+		;;
+	esac
+fi
+
+configured_preload=$clean_preload
+case "$preload_mode" in
+	none) ;;
+	compat)
+		test -r "$compat_library" || {
+			printf '%s\n' "Round43 opkrun proxy: missing compat library: $compat_library" >&2
+			exit 126
+		}
+		configured_preload=$compat_library${clean_preload:+:$clean_preload}
+		;;
+esac
+
+compat_force_software=
+compat_trace=
+case "$opk_class:$preload_mode" in
+	non-fba:compat)
+		compat_force_software=1
+		compat_trace=$round61_trace_default
+		;;
+esac
+
+# Diagnostic helpers must not inherit the emulator preload under test.
+unset LD_PRELOAD
+unset GKD_SIDEKEYS_TRACE
+unset GKD_SIDEKEYS_LOG
+unset GKD_PLATFORM_COMPAT_FORCE_SOFTWARE
+unset GKD_PLATFORM_COMPAT_TRACE
+
+# Exact-key, one-time-backed audio mutation is limited to the global FCEUX
+# file. It runs without any emulator/menu preload. FBA/FBN per-ROM
+# files and all saves/controls remain untouched.
+if test "$emulator_class" = fceux && test -x "$round61_profile_helper"; then
+	GKD_ROUND61_DEFAULT_CONFIG=$round61_config \
+		"$round61_profile_helper" apply-fceux >/dev/null 2>&1 || :
+fi
+umask 077
+
+start_epoch=$(date +%s 2>/dev/null)
+case "$start_epoch" in
+	''|*[!0-9]*) start_epoch=0 ;;
+esac
+run_id=$start_epoch-$$
+runtime_dir=$runtime_dir_requested
+if ! mkdir -p "$runtime_dir" 2>/dev/null || ! test -d "$runtime_dir" || ! test -w "$runtime_dir"; then
+	runtime_dir=${TMPDIR:-/tmp}/gkd-mini-round43-runtime-launch
+	mkdir -p "$runtime_dir" 2>/dev/null || runtime_dir=
+fi
+latest_log=${runtime_dir:+$runtime_dir/latest.log}
+probe_log=${runtime_dir:+$runtime_dir/probe-$run_id.log}
+probe_stop=${runtime_dir:+$runtime_dir/probe-$run_id.stop}
+gate_root=${runtime_dir:-${TMPDIR:-/tmp}}
+gate_file=$gate_root/round43-launch-$run_id.go
+gate_audit_file=${GKD_ROUND43_GATE_AUDIT_FILE-}
+probe_pid=
+probe_status=disabled
+child_pid=
+child_pgid=
+child_sid=
+child_starttime=
+identity_status=not-captured
+active_game_status=not-published
+proxy_signal=none
+
+single_line()
+{
+	printf '%s' "$1" | tr '\r\n' '  '
+}
+
+remove_active_game()
+{
+	if test -r "$round62_sidecar" &&
+		grep -Fqx "launcher_pid=${child_pid:-0}" "$round62_sidecar" 2>/dev/null &&
+		grep -Fqx "run_id=${round62_run_id:-invalid}" "$round62_sidecar" 2>/dev/null; then
+		rm -f "$round62_sidecar" 2>/dev/null
+	fi
+	rm -f "$round62_sidecar_tmp" 2>/dev/null
+}
+
+signal_isolated_helper()
+{
+	helper_pid=$1
+	helper_signal=$2
+	kill -"$helper_signal" -"$helper_pid" 2>/dev/null ||
+		kill -"$helper_signal" "$helper_pid" 2>/dev/null || :
+}
+
+stop_probe()
+{
+	if test -n "$probe_pid"; then
+		: >"$probe_stop" 2>/dev/null
+		signal_isolated_helper "$probe_pid" TERM
+		probe_status=term-requested-detached
+		probe_pid=
+	fi
+}
+
+forward_signal()
+{
+	proxy_signal=$1
+	signal_number=$2
+	if test -n "$child_pid"; then
+		kill -"$signal_number" "$child_pid" 2>/dev/null || :
+	fi
+}
+
+emergency_cleanup()
+{
+	: >"$gate_file" 2>/dev/null
+	if test -n "$probe_pid"; then
+		: >"$probe_stop" 2>/dev/null
+		kill "$probe_pid" 2>/dev/null || :
+	fi
+	remove_active_game
+	rm -f "$gate_file" "$probe_stop" 2>/dev/null
+}
+trap emergency_cleanup 0
+trap 'forward_signal HUP 1' 1
+trap 'forward_signal INT 2' 2
+trap 'forward_signal QUIT 3' 3
+trap 'forward_signal TERM 15' 15
+
+probe_requested=${GKD_ROUND61_RUNTIME_PROBE:-${GKD_ROUND43_PROBE:-$round61_probe_default}}
+case "$probe_requested" in 0|1) ;; *) probe_requested=0 ;; esac
+if test "$probe_requested" = 1; then
+	if test -n "$probe_log" && test -x "$probe_script"; then
+		rm -f "$probe_log" "$probe_stop" 2>/dev/null
+		if "$probe_script" --sample "$probe_log" pre-launch >/dev/null 2>&1; then
+			probe_status=pre-sampled
+		else
+			probe_status=pre-sample-failed
+		fi
+	else
+		probe_status=unavailable
+	fi
+fi
+
+# Round58 has no detached recovery watchdog or exit marker.
+
+# A short gate keeps the eventual /usr/bin/opkrun PID alive while its new
+# session identity is read and published.  setsid and the gate inherit no
+# LD_PRELOAD; the selected set is passed as an argv value and exported only
+# as GKD_PAYLOAD_PRELOAD; only the final payload exec sets LD_PRELOAD.  PID, PGID, and
+# starttime therefore remain those of the actual launcher without injecting
+# libraries into the lifecycle helpers.
+rm -f "$gate_file" 2>/dev/null
+"$setsid_command" /bin/sh -c '
+	gate=$1
+	configured_preload=$2
+	compat_force_software=$3
+	compat_trace=$4
+	gate_audit_file=$5
+	shift 5
+	if test -n "$gate_audit_file"; then
+		if test "${LD_PRELOAD+x}" = x; then
+			printf "gate_preload=%s\n" "$LD_PRELOAD" >"$gate_audit_file" 2>/dev/null
+		else
+			printf "%s\n" "gate_preload=unset" >"$gate_audit_file" 2>/dev/null
+		fi
+		printf "gate_force_software=%s\n" "${GKD_PLATFORM_COMPAT_FORCE_SOFTWARE-unset}" >>"$gate_audit_file" 2>/dev/null
+		printf "gate_trace=%s\n" "${GKD_PLATFORM_COMPAT_TRACE-unset}" >>"$gate_audit_file" 2>/dev/null
+	fi
+	while ! test -e "$gate"; do :; done
+	if test -n "$configured_preload"; then
+		GKD_PAYLOAD_PRELOAD=$configured_preload
+		export GKD_PAYLOAD_PRELOAD
+	else
+		unset GKD_PAYLOAD_PRELOAD
+	fi
+	unset LD_PRELOAD
+	if test -n "$compat_force_software"; then
+		GKD_PLATFORM_COMPAT_FORCE_SOFTWARE=$compat_force_software
+		export GKD_PLATFORM_COMPAT_FORCE_SOFTWARE
+	else
+		unset GKD_PLATFORM_COMPAT_FORCE_SOFTWARE
+	fi
+	if test -n "$compat_trace"; then
+		GKD_PLATFORM_COMPAT_TRACE=$compat_trace
+		export GKD_PLATFORM_COMPAT_TRACE
+	else
+		unset GKD_PLATFORM_COMPAT_TRACE
+	fi
+	exec "$@"
+' round48-launch-gate "$gate_file" "$configured_preload" \
+	"$compat_force_software" "$compat_trace" "$gate_audit_file" \
+	"$real_opkrun" "$@" &
+child_pid=$!
+
+capture_identity()
+{
+	child_pgid=
+	child_starttime=
+	test -r "$proc_root/$child_pid/stat" || return 1
+	stat_tail=$(sed 's/.*) //' "$proc_root/$child_pid/stat" 2>/dev/null) || return 1
+	set -- $stat_tail
+	test "$#" -ge 20 || return 1
+	candidate_pgid=$3
+	candidate_sid=$4
+	shift 19
+	candidate_starttime=$1
+	case "$candidate_pgid:$candidate_starttime" in
+		*[!0-9:]*) return 1 ;;
+	esac
+	test "$candidate_pgid" = "$child_pid" || return 1
+	child_pgid=$candidate_pgid
+	child_sid=$candidate_sid
+	child_starttime=$candidate_starttime
+	return 0
+}
+
+identity_attempt=0
+while test "$identity_attempt" -lt 64; do
+	if capture_identity; then
+		identity_status=available
+		break
+	fi
+	identity_attempt=$((identity_attempt + 1))
+	sleep 0 2>/dev/null || :
+done
+if test "$identity_status" != available; then
+	child_pgid=$child_pid
+	child_sid=unavailable
+	child_starttime=unavailable
+	identity_status=unavailable
+fi
+
+if mkdir -p "$active_game_dir" 2>/dev/null; then
+	{
+		printf 'source=%s\n' "${GKD_MENU_SOURCE:-unknown}"
+		printf 'profile=%s\n' "${GKD_MENU_PROFILE:-passthrough}"
+		printf 'coverage=%s\n' "${GKD_MENU_COVERAGE:-unknown}"
+		printf 'round61_audio_profile=%s\n' "$round61_audio_profile"
+		printf 'round61_probe=%s\n' "$probe_requested"
+		printf 'opk=%s\n' "$opk"
+	} >"$active_game_dir/menu-map.$$" 2>/dev/null &&
+		mv -f "$active_game_dir/menu-map.$$" "$active_game_dir/menu-map.state" 2>/dev/null ||
+		rm -f "$active_game_dir/menu-map.$$" 2>/dev/null
+	active_game_status=native-owned
+else
+	active_game_status=directory-unavailable
+fi
+
+	if test "$active_game_status" = native-owned &&
+		test "$round62_trace_status" = enabled; then
+		{
+			printf 'boot_id=%s\n' "$round62_boot_id"
+			printf 'run_id=%s\n' "$round62_run_id"
+			printf 'publisher_pid=%s\n' "$round62_publisher_pid"
+			printf 'publisher_starttime=%s\n' "$round62_publisher_starttime"
+			printf 'launcher_pid=%s\n' "$child_pid"
+			printf 'launcher_pgid=%s\n' "$child_pgid"
+			printf 'launcher_sid=%s\n' "$child_sid"
+			printf 'launcher_starttime=%s\n' "$child_starttime"
+			printf 'menu_pid=%s\n' "$round62_menu_pid"
+			printf 'menu_starttime=%s\n' "$round62_menu_starttime"
+			printf 'menu_exe=%s\n' "$round62_menu_exe"
+			printf 'end_file=%s\n' "$round62_end_file"
+		} >"$round62_sidecar_tmp" 2>/dev/null &&
+			mv -f "$round62_sidecar_tmp" "$round62_sidecar" 2>/dev/null ||
+			rm -f "$round62_sidecar_tmp" 2>/dev/null
+		if test -r "$round62_sidecar"; then
+			rm -f "$round62_end_file" "$round62_end_tmp" 2>/dev/null
+			round62_trace_emit "v=1 boot_id=$round62_boot_id run_id=$round62_run_id component=opkrun generation=62 event=launcher_identity result=native-owned publisher_pid=$round62_publisher_pid publisher_starttime=$round62_publisher_starttime launcher_pid=$child_pid launcher_pgid=$child_pgid launcher_sid=$child_sid launcher_starttime=$child_starttime menu_pid=$round62_menu_pid menu_starttime=$round62_menu_starttime"
+		else
+			round62_trace_status=sidecar-failed
+		fi
+	fi
+
+if test "$probe_requested" = 1 && test -n "$probe_log" && test -x "$probe_script"; then
+	"$setsid_command" "$probe_script" --loop "$probe_log" "$probe_stop" >/dev/null 2>&1 &
+	probe_pid=$!
+	probe_status=running
+fi
+
+# Release the native launcher after frontend telemetry is prepared.
+# The native launcher owns active-game publication before starting the payload.
+: >"$gate_file" 2>/dev/null
+while :; do
+	wait "$child_pid"
+	status=$?
+	if kill -0 "$child_pid" 2>/dev/null; then
+		continue
+	fi
+	break
+done
+end_epoch=$(date +%s 2>/dev/null)
+case "$end_epoch" in
+	''|*[!0-9]*) end_epoch=$start_epoch ;;
+esac
+trap - 1 2 3 15
+# Normal completion returns directly to the one init-owned frontend tree.
+remove_active_game
+stop_probe
+
+if test -n "$runtime_dir"; then
+	record_tmp=$runtime_dir/record-$run_id.tmp
+	{
+		printf '%s\n' 'round58_fast_exit_begin'
+		printf 'run_id=%s\n' "$run_id"
+		printf 'opk_class=%s\n' "$opk_class"
+		printf 'pid=%s\n' "$child_pid"
+		printf 'active_game_status=%s\n' "$active_game_status"
+		printf 'probe_status=%s\n' "$probe_status"
+		printf '%s\n' 'post_child_probe_wait=false'
+		printf '%s\n' 'persistent_log_post_child=false'
+		printf '%s\n' 'force_exit_recovery=disabled'
+		printf '%s\n' 'direct_menu_spawn=false'
+		printf 'exit_code=%s\n' "$status"
+		printf '%s\n' 'round58_fast_exit_end'
+	} >"$record_tmp" 2>/dev/null
+	if test -r "$record_tmp"; then
+		mv -f "$record_tmp" "$latest_log" 2>/dev/null ||
+			rm -f "$record_tmp" 2>/dev/null
+	fi
+fi
+
+# Lifecycle records are complete before returning the emulator status.
+
+if test "$round62_trace_status" = enabled; then
+	{
+		printf 'boot_id=%s\n' "$round62_boot_id"
+		printf 'run_id=%s\n' "$round62_run_id"
+		printf 'publisher_pid=%s\n' "$round62_publisher_pid"
+		printf 'publisher_starttime=%s\n' "$round62_publisher_starttime"
+		printf 'status=%s\n' "$status"
+	} >"$round62_end_tmp" 2>/dev/null &&
+		mv -f "$round62_end_tmp" "$round62_end_file" 2>/dev/null ||
+		rm -f "$round62_end_tmp" 2>/dev/null
+	round62_trace_emit "v=1 boot_id=$round62_boot_id run_id=$round62_run_id component=opkrun generation=62 event=opkrun_end status=$status publisher_pid=$round62_publisher_pid publisher_starttime=$round62_publisher_starttime menu_visibility=not_observed"
+fi
+
+trap - 0
+# Keep the stop flag for a detached probe which has not observed TERM yet.
+rm -f "$gate_file" 2>/dev/null
+exit "$status"

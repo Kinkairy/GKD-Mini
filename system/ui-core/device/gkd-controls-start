@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+# Host-managed boot or explicit RAM invocation; one pinned configuration snapshot.
+set -eu
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+managed=0
+case $# in
+    0) ;;
+    3) [ "$1" = --managed ] || exit 2; managed=1 ;;
+    *) exit 2 ;;
+esac
+# One successful dump pins one config-core effective generation. Never source config.
+snapshot=$(/usr/sbin/gkd-config dump) || exit 1
+step= steps= ttl= osd= dynamic_effects= curve= up= down= brightness=
+persist= delay= default_volume= default_brightness=
+while IFS='=' read -r key value; do
+    case "$key" in
+        volume_step) [ -z "$step" ]; step=$value ;;
+        brightness_steps) [ -z "$steps" ]; steps=$value ;;
+        volume_osd_timeout_ms) [ -z "$ttl" ]; ttl=$value ;;
+        volume_osd) [ -z "$osd" ]; osd=$value ;;
+        ui_dynamic_effects) [ -z "$dynamic_effects" ]; dynamic_effects=$value ;;
+        volume_curve) [ -z "$curve" ]; curve=$value ;;
+        input_map_volume_up) [ -z "$up" ]; up=$value ;;
+        input_map_volume_down) [ -z "$down" ]; down=$value ;;
+        input_map_brightness) [ -z "$brightness" ]; brightness=$value ;;
+        hardware_state_persistence) [ -z "$persist" ]; persist=$value ;;
+        hardware_state_save_delay_ms) [ -z "$delay" ]; delay=$value ;;
+        volume_default_percent) [ -z "$default_volume" ]; default_volume=$value ;;
+        brightness_default_percent) [ -z "$default_brightness" ]; default_brightness=$value ;;
+    esac
+done <<EOF
+$snapshot
+EOF
+[ -n "$step" ] && [ -n "$steps" ] && [ -n "$ttl" ] && [ -n "$osd" ] && [ -n "$dynamic_effects" ] || exit 1
+[ "$dynamic_effects" = enabled ] || [ "$dynamic_effects" = disabled ] || exit 1
+[ "$curve" = perceptual ] && [ -n "$up" ] && [ -n "$down" ] && [ -n "$brightness" ] || exit 1
+if [ "$managed" = 1 ]; then
+    [ -n "$persist" ] && [ -n "$delay" ] && [ -n "$default_volume" ] && [ -n "$default_brightness" ] || exit 1
+    exec /usr/sbin/gkd-controls "$step" "$steps" "$ttl" "$osd" "$dynamic_effects" "$up" "$down" "$brightness" \
+        --managed "$2" "$3" "$persist" "$delay" "$default_volume" "$default_brightness"
+fi
+exec /usr/sbin/gkd-controls "$step" "$steps" "$ttl" "$osd" "$dynamic_effects" "$up" "$down" "$brightness"

@@ -1,0 +1,122 @@
+#!/bin/sh
+set -eu
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+disk=/dev/mmcblk0
+p1=/dev/mmcblk0p1
+p3=/dev/mmcblk0p3
+game=/dev/mmcblk1p1
+game_mount=/media/sdcard
+package=$game_mount/gkd-update/system.gkdupdate
+engine=/usr/sbin/gkd-update-engine
+coordinator=/usr/sbin/gkd-update-coordinator
+prepare=/usr/sbin/gkd-update-prepare
+request=/usr/sbin/gkd-update-request-tool
+public_key=/etc/gkd-mini/update-public.pem
+runtime_id_file=/etc/gkd-mini/runtime-id
+
+usage() {
+	printf '%s\n' 'usage: gkd-recovery status|update|cancel|rollback|discard-stale-journal'
+	exit 64
+}
+
+status() {
+	printf '%s\n' 'GKD_RECOVERY_MODE=RAM'
+	set +e
+	"$request" show "$disk"
+	request_status=$?
+	set -e
+	case "$request_status" in
+		0) : ;;
+		3) printf '%s\n' 'request=none' ;;
+		*) printf '%s\n' 'request=unreadable' ;;
+	esac
+	if ! "$engine" inspect "$p3"; then
+		printf '%s\n' 'journal=none-or-invalid'
+	fi
+	printf 'mounts='
+	awk '$1 ~ /^\/dev\/mmcblk0/ {printf "%s:%s ",$1,$2} END {print ""}' /proc/mounts
+	printf 'swap='
+	awk 'NR > 1 {printf "%s ",$1} END {print ""}' /proc/swaps
+}
+
+power_gate() {
+	percent=
+	powered=0
+	for value in /sys/class/power_supply/*/capacity; do
+		[ -r "$value" ] || continue
+		percent=$(sed -n '1p' "$value")
+		break
+	done
+	for value in /sys/class/power_supply/*/online; do
+		[ -r "$value" ] || continue
+		[ "$(sed -n '1p' "$value")" = 1 ] && powered=1
+	done
+	case "$percent" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$percent" -ge 30 ] || [ "$powered" -eq 1 ]
+}
+
+mount_game() {
+	mkdir -p "$game_mount"
+	! awk -v d="$game" '$1 == d {found=1} END {exit !found}' /proc/mounts ||
+		return 1
+	mount -t vfat -o ro,nosuid,nodev,noexec,utf8 "$game" "$game_mount"
+}
+
+prepare_update() {
+	power_gate || {
+		printf '%s\n' 'GKD_RECOVERY=BLOCKED action=update reason=power' >&2
+		return 2
+	}
+	[ -x "$prepare" ] && [ -r "$public_key" ] && [ -r "$runtime_id_file" ] || {
+		printf '%s\n' 'GKD_RECOVERY=BLOCKED action=update reason=components' >&2
+		return 2
+	}
+	runtime_id=$(sed -n '1p' "$runtime_id_file")
+	case "$runtime_id" in ''|*[!0-9a-f]*) return 2 ;; esac
+	[ "${#runtime_id}" -eq 64 ] || return 2
+	mounted=0
+	mount_game
+	mounted=1
+	if [ ! -f "$package" ] ||
+	   ! "$prepare" "$package" "$public_key" "$disk" "$runtime_id" "$p3"; then
+		[ "$mounted" -eq 0 ] || umount "$game_mount" || true
+		printf '%s\n' 'GKD_RECOVERY=BLOCKED action=update reason=prepare' >&2
+		return 2
+	fi
+	umount "$game_mount"
+	sync
+	printf '%s\n' 'GKD_RECOVERY=PASS action=update-prepared reboot=1'
+	reboot
+	return 1
+}
+
+[ "$#" = 1 ] || usage
+case "$1" in
+	status) status ;;
+	update) prepare_update ;;
+	cancel)
+		"$request" clear-current "$disk"
+		sync
+		printf '%s\n' 'GKD_RECOVERY=PASS action=cancel request_only=1'
+		;;
+	rollback)
+		set +e
+		"$coordinator" /run/gkd-recovery/no-package "$p3" "$p1" "$disk" "$engine"
+		result=$?
+		set -e
+		case "$result" in
+			20) printf '%s\n' 'GKD_RECOVERY=PASS action=rollback-and-finalize' ;;
+			*) printf 'GKD_RECOVERY=BLOCKED action=rollback status=%s\n' "$result" >&2
+			   exit "$result" ;;
+		esac
+		;;
+	discard-stale-journal)
+		if "$request" show "$disk" >/dev/null 2>&1; then
+			printf '%s\n' 'GKD_RECOVERY=BLOCKED reason=request-present' >&2
+			exit 2
+		fi
+		"$engine" format-swap "$p3"
+		printf '%s\n' 'GKD_RECOVERY=PASS action=discard-stale-journal'
+		;;
+	*) usage ;;
+esac

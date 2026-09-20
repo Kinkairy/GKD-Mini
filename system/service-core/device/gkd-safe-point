@@ -1,0 +1,33 @@
+#!/bin/sh
+
+ACTION_FREEZE=${GKD_ACTION_FREEZE:-/run/gkd-action-freeze/lease}
+MENU_LEASE=${GKD_MENU_LEASE:-/run/gkd-menu-owner/lease}
+INPUT_IDLE=${GKD_INPUT_IDLE_CMD:-/usr/libexec/gkd-mini/gkd-input-idle}
+NETWORK_RUN=${GKD_NETWORK_RUN_DIR:-/run/gkd-usb-internet-auto}
+OWN_REQUESTER=${GKD_SAFEPOINT_OWN_REQUESTER:-}
+
+action_idle()
+{
+	[ ! -s "$ACTION_FREEZE" ] && return 0
+	case "$OWN_REQUESTER" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$(sed -n 's/^kind=//p' "$ACTION_FREEZE")" = config-refresh ] &&
+		[ "$(sed -n 's/^requester=//p' "$ACTION_FREEZE")" = "$OWN_REQUESTER" ]
+}
+
+idle()
+{
+	action_idle && [ ! -s "$MENU_LEASE" ]
+}
+
+case "${1:-}" in
+	action-idle|transaction-idle) idle ;;
+	keys-released)
+		idle && [ -x "$INPUT_IDLE" ] && "$INPUT_IDLE"
+		;;
+	network-rebuild)
+		idle && [ ! -e "$NETWORK_RUN/charge-desired" ] &&
+			[ ! -e "$NETWORK_RUN/network-owned" ] &&
+			[ ! -e "$NETWORK_RUN/enabled" ]
+		;;
+	*) exit 2 ;;
+esac

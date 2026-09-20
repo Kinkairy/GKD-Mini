@@ -1,0 +1,396 @@
+#!/bin/sh
+set -u
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+run=/run/gkd-usb-internet-auto
+trace=/run/gkd-usb-chooser/trace.log
+chunk=$run/trace.chunk
+desired_marker=$run/charge-desired
+owned_marker=$run/network-owned
+enabled_marker=$run/enabled
+explicit_ssh_pid=$run/explicit-ssh.pid
+explicit_ssh_native_pid=$run/explicit-ssh.native.pid
+resolv=/usr/local/etc/resolv.conf
+restore_state=/usr/local/etc/gkd-mini/usb-internet-resolv.state
+restore_backup=/usr/local/etc/gkd-mini/usb-internet-resolv.backup
+network_ui=/sys/class/graphics/fb0/gkd_network_status
+menu_ui=/sys/class/graphics/fb0/gkd_usb_menu
+config_lib=${GKD_CONFIG_LIB:-/usr/lib/gkd-mini/config.sh}
+[ -f "$config_lib" ] && [ ! -L "$config_lib" ] || exit 68
+. "$config_lib"
+
+load_config()
+{
+	gkd_config_select || return 1
+	iface=$(gkd_config_token usb_internet_interface usb0 15) || return 1
+	management_ip=$(gkd_config_ipv4 usb_device_ip 10.1.1.2) || return 1
+	internet_ip=$(gkd_config_ipv4 usb_internet_device_ip 192.168.137.2) || return 1
+	gateway=$(gkd_config_ipv4 usb_internet_gateway 192.168.137.1) || return 1
+	internet_prefix=$(gkd_config_uint usb_internet_prefix_length 24 8 30) || return 1
+	poll_seconds=$(gkd_config_uint usb_internet_poll_seconds 2 1 10) || return 1
+	health_timeout=$(gkd_config_uint usb_internet_health_timeout_seconds 2 1 10) || return 1
+	enable_timeout=$(gkd_config_uint usb_internet_enable_timeout_seconds 4 1 15) || return 1
+	network_panel_lease_ms=$(gkd_config_uint usb_internet_panel_lease_ms 5000 2000 60000) || return 1
+	explicit_ssh_port=$(gkd_config_uint usb_internet_ssh_port 22 1 65535) || return 1
+	explicit_ssh_idle=$(gkd_config_uint usb_internet_ssh_idle_seconds 600 60 86400) || return 1
+	[ "$network_panel_lease_ms" -gt $((poll_seconds * 1000)) ] || return 1
+}
+
+log_event()
+{
+	mkdir -p "$run" || return
+	printf 'ts=%s event=%s\n' "$(date +%s)" "$1" >>"$run/trace.log"
+}
+
+proc_start()
+{
+	awk '$3 != "Z" {print $22}' "/proc/$1/stat" 2>/dev/null || true
+}
+
+explicit_ssh_process_matches()
+{
+	explicit_pid=$1
+	explicit_start=$2
+	[ "$(proc_start "$explicit_pid")" = "$explicit_start" ] || return 1
+	[ "$(cat "/proc/$explicit_pid/comm" 2>/dev/null || true)" = dropbear ] || return 1
+	[ "$(readlink "/proc/$explicit_pid/exe" 2>/dev/null || true)" = /usr/sbin/dropbear ] || return 1
+	explicit_cmd=$(tr '\000' ' ' <"/proc/$explicit_pid/cmdline" 2>/dev/null || true)
+	case "$explicit_cmd" in
+	*" -P $explicit_ssh_native_pid -p $internet_ip:$explicit_ssh_port -I $explicit_ssh_idle "*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+explicit_ssh_alive()
+{
+	[ -s "$explicit_ssh_pid" ] || return 1
+	IFS=' ' read -r explicit_pid explicit_start <"$explicit_ssh_pid" || return 1
+	case "$explicit_pid:$explicit_start" in *[!0-9:]*|:*|*:) return 1 ;; esac
+	explicit_ssh_process_matches "$explicit_pid" "$explicit_start"
+}
+
+stop_explicit_ssh()
+{
+	explicit_pid=
+	explicit_start=
+	if explicit_ssh_alive; then
+		:
+	elif [ -s "$explicit_ssh_native_pid" ]; then
+		explicit_pid=$(cat "$explicit_ssh_native_pid" 2>/dev/null || true)
+		case "$explicit_pid" in ''|*[!0-9]*) explicit_pid= ;; esac
+		[ -z "$explicit_pid" ] || explicit_start=$(proc_start "$explicit_pid")
+		case "$explicit_start" in ''|*[!0-9]*) explicit_start= ;; esac
+		[ -z "$explicit_start" ] || explicit_ssh_process_matches "$explicit_pid" "$explicit_start" || {
+			explicit_pid=; explicit_start=;
+		}
+	fi
+	if [ -n "$explicit_pid" ] && [ -n "$explicit_start" ]; then
+		kill "$explicit_pid" 2>/dev/null || true
+		explicit_waits=0
+		while explicit_ssh_process_matches "$explicit_pid" "$explicit_start" &&
+		      [ "$explicit_waits" -lt 5 ]; do
+			sleep 1
+			explicit_waits=$((explicit_waits + 1))
+		done
+		if explicit_ssh_process_matches "$explicit_pid" "$explicit_start"; then
+			kill -9 "$explicit_pid" 2>/dev/null || true
+			sleep 1
+		fi
+	fi
+	rm -f -- "$explicit_ssh_pid" "$explicit_ssh_native_pid"
+}
+
+select_explicit_ssh_host_key()
+{
+	explicit_ssh_host_key=
+	for explicit_candidate in \
+		/usr/local/etc/gkd-mini/dropbear_rsa_host_key \
+		/usr/local/etc/gkd-mini/dropbear_ed25519_host_key
+	do
+		[ -f "$explicit_candidate" ] && [ ! -L "$explicit_candidate" ] || continue
+		/usr/bin/dropbearkey -y -f "$explicit_candidate" >/dev/null 2>&1 || continue
+		explicit_ssh_host_key=$explicit_candidate
+		break
+	done
+	[ -n "$explicit_ssh_host_key" ]
+}
+
+start_explicit_ssh()
+{
+	explicit_ssh_alive && return 0
+	stop_explicit_ssh
+	[ -x /usr/sbin/dropbear ] && [ -x /usr/bin/dropbearkey ] || return 1
+	select_explicit_ssh_host_key || return 1
+	/usr/sbin/dropbear -F -r "$explicit_ssh_host_key" \
+		-P "$explicit_ssh_native_pid" -p "$internet_ip:$explicit_ssh_port" \
+		-I "$explicit_ssh_idle" >/dev/null 2>&1 &
+	explicit_pid=$!
+	explicit_start=$(proc_start "$explicit_pid")
+	case "$explicit_start" in ''|*[!0-9]*) stop_explicit_ssh; return 1 ;; esac
+	explicit_waits=0
+	while [ "$explicit_waits" -lt 5 ]; do
+		explicit_native=$(cat "$explicit_ssh_native_pid" 2>/dev/null || true)
+		if [ "$explicit_native" = "$explicit_pid" ] &&
+		   explicit_ssh_process_matches "$explicit_pid" "$explicit_start"; then
+			printf '%s %s\n' "$explicit_pid" "$explicit_start" >"$explicit_ssh_pid.new" || break
+			chmod 0600 "$explicit_ssh_pid.new" || break
+			mv "$explicit_ssh_pid.new" "$explicit_ssh_pid" || break
+			explicit_ssh_alive && return 0
+			break
+		fi
+		sleep 1
+		explicit_waits=$((explicit_waits + 1))
+	done
+	rm -f -- "$explicit_ssh_pid.new"
+	if explicit_ssh_process_matches "$explicit_pid" "$explicit_start"; then
+		kill "$explicit_pid" 2>/dev/null || true
+	fi
+	stop_explicit_ssh
+	return 1
+}
+
+has_management_address()
+{
+	ip -f inet addr show dev "$iface" 2>/dev/null |
+		grep -Fq "inet $management_ip/"
+}
+
+has_internet_address()
+{
+	ip -f inet addr show dev "$iface" 2>/dev/null |
+		grep -Fq "inet $internet_ip/$internet_prefix "
+}
+
+has_owned_route()
+{
+	ip route 2>/dev/null |
+		grep -Fq "default via $gateway dev $iface"
+}
+
+ics_ready()
+{
+	has_management_address || return 1
+	has_internet_address || return 1
+	has_owned_route || return 1
+	ping -c 1 -W "$health_timeout" "$gateway" >/dev/null 2>&1
+}
+
+restore_dns()
+{
+	[ -f "$restore_state" ] || return 0
+	state=$(cat "$restore_state" 2>/dev/null || true)
+	case "$state" in
+	present)
+		[ -f "$restore_backup" ] || return 1
+		cp -p "$restore_backup" "$resolv.restore.$$" || return 1
+		mv "$resolv.restore.$$" "$resolv" || return 1
+		;;
+	absent)
+		rm -f -- "$resolv" || return 1
+		;;
+	*) return 1 ;;
+	esac
+	rm -f -- "$restore_backup" "$restore_state"
+	return 0
+}
+
+save_dns()
+{
+	[ ! -e "$restore_state" ] || return 1
+	mkdir -p /usr/local/etc/gkd-mini || return 1
+	if [ -e "$resolv" ]; then
+		[ -f "$resolv" ] && [ ! -L "$resolv" ] || return 1
+		cp -p "$resolv" "$restore_backup.new" || return 1
+		mv "$restore_backup.new" "$restore_backup" || return 1
+		state=present
+	else
+		rm -f -- "$restore_backup"
+		state=absent
+	fi
+	printf '%s\n' "$state" >"$restore_state.new" || return 1
+	chmod 0600 "$restore_state.new" || return 1
+	mv "$restore_state.new" "$restore_state" || return 1
+	printf 'nameserver %s\n' "$gateway" >"$resolv.new" || return 1
+	chmod 0644 "$resolv.new" || return 1
+	mv "$resolv.new" "$resolv" || return 1
+	return 0
+}
+
+set_network_ui()
+{
+	[ -w "$network_ui" ] || return 0
+	if [ "$1" = online ]; then
+		display_ip=$(
+			ip -f inet addr show dev "$iface" 2>/dev/null |
+				awk -v wanted="$internet_ip/$internet_prefix" '
+					$1 == "inet" && $2 == wanted {
+						sub(/\/.*/, "", $2); print $2; exit
+					}'
+		)
+		[ -n "$display_ip" ] || return 0
+		printf 'online %s\n' "$display_ip" >"$network_ui" 2>/dev/null || true
+	else
+		printf '%s\n' "$1" >"$network_ui" 2>/dev/null || true
+	fi
+}
+
+renew_network_panel()
+{
+	[ -w "$menu_ui" ] || return 0
+	printf 'status charge %s\n' "$network_panel_lease_ms" >"$menu_ui" 2>/dev/null || true
+}
+
+cleanup_owned()
+{
+	set_network_ui offline
+	stop_explicit_ssh
+	if [ -e "$owned_marker" ]; then
+		while has_owned_route; do
+			ip route del default via "$gateway" dev "$iface" metric 50 2>/dev/null || break
+		done
+		if has_internet_address; then
+			ip addr del "$internet_ip/$internet_prefix" dev "$iface" 2>/dev/null || true
+		fi
+	fi
+	restore_dns || true
+	rm -f -- "$enabled_marker" "$owned_marker"
+}
+
+enable_once()
+{
+	if [ -e "$enabled_marker" ] && [ -e "$owned_marker" ] &&
+	   ics_ready; then
+		start_explicit_ssh || true
+		set_network_ui online
+		return 0
+	fi
+	cleanup_owned
+	has_management_address || return 1
+	if has_internet_address || has_owned_route; then
+		return 1
+	fi
+	if ip route 2>/dev/null | grep -q '^default '; then
+		return 1
+	fi
+	touch "$owned_marker" || return 1
+	ip addr add "$internet_ip/$internet_prefix" dev "$iface" 2>/dev/null || {
+		cleanup_owned; return 1;
+	}
+	ip route add default via "$gateway" dev "$iface" metric 50 2>/dev/null || {
+		cleanup_owned; return 1;
+	}
+	ping -c 1 -W "$enable_timeout" "$gateway" >/dev/null 2>&1 || {
+		cleanup_owned; return 1;
+	}
+	save_dns || {
+		cleanup_owned; return 1;
+	}
+	touch "$enabled_marker"
+	start_explicit_ssh || true
+	set_network_ui online
+	return 0
+}
+
+set_desired()
+{
+	case "$1" in
+	1) touch "$desired_marker" ;;
+	0) rm -f -- "$desired_marker" ;;
+	esac
+}
+
+handle_trace_line()
+{
+	case "$1" in
+	*event=mode-selected*detail=charge*) set_desired 1 ;;
+	*event=mode-selected*|*event=chooser-visible-grabbed*|*event=usb-reattached*|\
+	*event=fail-open*|*event=service-started*|*event=service-stopped*) set_desired 0 ;;
+	esac
+}
+
+daemon_main()
+{
+	mkdir -p "$run" || exit 1
+	chmod 0700 "$run"
+	cleanup_owned
+	set_desired 0
+	cursor=0
+	waiting_logged=0
+	trap 'set_desired 0; cleanup_owned; log_event stopped; exit 0' TERM INT HUP
+	log_event started
+	while :; do
+		if [ -f "$trace" ]; then
+			size=$(wc -c <"$trace" 2>/dev/null || true)
+			case "$size" in ''|*[!0-9]*) size=0 ;; esac
+			if [ "$size" -lt "$cursor" ]; then
+				cursor=0
+				set_desired 0
+			fi
+			if [ "$size" -gt "$cursor" ]; then
+				count=$((size - cursor))
+				dd if="$trace" of="$chunk" bs=1 skip="$cursor" count="$count" 2>/dev/null || true
+				cursor=$size
+				while IFS= read -r line || [ -n "$line" ]; do
+					handle_trace_line "$line"
+				done <"$chunk"
+			fi
+		else
+			cursor=0
+			set_desired 0
+		fi
+		udc_state=$(cat /sys/class/udc/13500000.usb/state 2>/dev/null || true)
+		case "$udc_state" in
+		configured|suspended) ;;
+		*) set_desired 0 ;;
+		esac
+		if [ -e "$desired_marker" ]; then
+			if enable_once; then
+				renew_network_panel
+				if [ "$waiting_logged" -ne 2 ]; then
+					log_event ics-enabled
+					waiting_logged=2
+				fi
+			else
+				if [ "$waiting_logged" -eq 0 ]; then
+					log_event ics-unavailable-charging-only
+					waiting_logged=1
+				fi
+			fi
+		else
+			if [ -e "$owned_marker" ] || [ -e "$restore_state" ]; then
+				cleanup_owned
+				log_event ics-disabled
+			fi
+			waiting_logged=0
+		fi
+		sleep "$poll_seconds"
+	done
+}
+
+load_config || exit 65
+case "${1:-status}" in
+daemon) daemon_main ;;
+cleanup) set_desired 0; cleanup_owned ;;
+status)
+	if [ -e "$enabled_marker" ] && has_internet_address && has_owned_route; then
+		if explicit_ssh_alive; then
+			echo GKD_USB_INTERNET_AUTO=enabled-explicit-ssh
+		else
+			echo GKD_USB_INTERNET_AUTO=enabled-network-only
+		fi
+	elif [ -e "$desired_marker" ]; then
+		echo GKD_USB_INTERNET_AUTO=charge-waiting-for-ics
+	else
+		echo GKD_USB_INTERNET_AUTO=idle
+	fi
+	;;
+config)
+	printf 'GKD_USB_INTERNET_CONFIG=iface:%s management:%s internet:%s/%s gateway:%s poll:%ss recheck:%ss initial:%ss lease:%sms ssh:%s idle:%ss\n' \
+		"$iface" "$management_ip" "$internet_ip" "$internet_prefix" "$gateway" \
+		"$poll_seconds" "$health_timeout" "$enable_timeout" "$network_panel_lease_ms" \
+		"$explicit_ssh_port" "$explicit_ssh_idle"
+	;;
+*) exit 64 ;;
+esac

@@ -1,0 +1,36 @@
+{
+  "retained_base_regular": [
+    "/bin/busybox",
+    "/lib/ld-uClibc-0.9.33.2.so",
+    "/lib/libuClibc-0.9.33.2.so",
+    "/lib/libm-0.9.33.2.so",
+    "/etc/passwd",
+    "/etc/group",
+    "/etc/gkd-mini/udhcpd.conf",
+    "/usr/sbin/dropbear",
+    "/usr/sbin/gkd-round64-filecheck",
+    "/usr/lib/gkd-usb-round64/ssh-rndis-hook"
+  ],
+  "excluded_base_regular": [
+    "/etc/gkd-mini/round64-frontend-contract",
+    "/etc/gkd-mini/round64-raw-contract",
+    "/etc/gkd-mini/round64-transition-contract",
+    "/etc/gkd-mini/round64-usb-owner",
+    "/usr/sbin/gkd-round64-state-publisher",
+    "/usr/sbin/gkd-round64-transition-commit",
+    "/usr/sbin/gkd-round64-transition-writer",
+    "/usr/sbin/gkd-usb-mode",
+    "/usr/lib/gkd-usb-round64/gkd-round64-rescue-ui",
+    "/usr/lib/gkd-usb-round64/gkd-usb-mode-body",
+    "/usr/lib/gkd-usb-round64/rescue-ssh-caller",
+    "/usr/sbin/gkd-round80-trigger",
+    "/usr/sbin/gkd-round80-return-agent",
+    "/etc/gkd-mini/gdkmini.conf",
+    "/usr/sbin/gkd-action-freeze",
+    "/etc/init.d/S94gkd-screenshot",
+    "/usr/sbin/gkd-screenshot"
+  ],
+  "replaced_regular": [
+    "/usr/sbin/gkd-screenshot"
+  ]
+}

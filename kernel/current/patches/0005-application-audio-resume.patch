@@ -1,0 +1,146 @@
+diff --git a/sound/soc/codecs/es8323.c b/sound/soc/codecs/es8323.c
+--- a/sound/soc/codecs/es8323.c
++++ b/sound/soc/codecs/es8323.c
+@@ -103,20 +103,26 @@
+ 	{ 12000000, 96000,  125, 0x00, 1 },
+ };
+ 
++/*
++ * Cache defaults describe the completed vendor initialization plus safe mute,
++ * not raw power-on values. Resume repeats that hardware sequence in bypass
++ * mode before regcache_sync(), whose dirty-cache path skips default values.
++ * Keep this table aligned with es8323_init_sequence and the final DAC mute.
++ */
+ static const struct reg_default es8323_reg_defaults[] = {
+-	{ 0x00, 0x06 }, { 0x01, 0x1c }, { 0x02, 0xc3 }, { 0x03, 0xfc },
+-	{ 0x04, 0xc0 }, { 0x05, 0x00 }, { 0x06, 0x00 }, { 0x07, 0x7c },
+-	{ 0x08, 0x80 }, { 0x09, 0x00 }, { 0x0a, 0x00 }, { 0x0b, 0x06 },
+-	{ 0x0c, 0x00 }, { 0x0d, 0x06 }, { 0x0e, 0x30 }, { 0x0f, 0x30 },
+-	{ 0x10, 0xc0 }, { 0x11, 0xc0 }, { 0x12, 0x38 }, { 0x13, 0xb0 },
+-	{ 0x14, 0x32 }, { 0x15, 0x06 }, { 0x16, 0x00 }, { 0x17, 0x00 },
+-	{ 0x18, 0x06 }, { 0x19, 0x30 }, { 0x1a, 0xc0 }, { 0x1b, 0xc0 },
++	{ 0x00, 0x35 }, { 0x01, 0x50 }, { 0x02, 0x00 }, { 0x03, 0x59 },
++	{ 0x04, 0x2c }, { 0x05, 0x00 }, { 0x06, 0x00 }, { 0x07, 0x7c },
++	{ 0x08, 0x00 }, { 0x09, 0x88 }, { 0x0a, 0xf0 }, { 0x0b, 0x82 },
++	{ 0x0c, 0x4c }, { 0x0d, 0x02 }, { 0x0e, 0x30 }, { 0x0f, 0x30 },
++	{ 0x10, 0x00 }, { 0x11, 0x00 }, { 0x12, 0xea }, { 0x13, 0xc0 },
++	{ 0x14, 0x05 }, { 0x15, 0x06 }, { 0x16, 0x53 }, { 0x17, 0x18 },
++	{ 0x18, 0x02 }, { 0x19, 0x06 }, { 0x1a, 0x0a }, { 0x1b, 0x0a },
+ 	{ 0x1c, 0x08 }, { 0x1d, 0x06 }, { 0x1e, 0x1f }, { 0x1f, 0xf7 },
+ 	{ 0x20, 0xfd }, { 0x21, 0xff }, { 0x22, 0x1f }, { 0x23, 0xf7 },
+-	{ 0x24, 0xfd }, { 0x25, 0xff }, { 0x26, 0x00 }, { 0x27, 0x38 },
+-	{ 0x28, 0x38 }, { 0x29, 0x38 }, { 0x2a, 0x38 }, { 0x2b, 0x38 },
++	{ 0x24, 0xfd }, { 0x25, 0xff }, { 0x26, 0x12 }, { 0x27, 0xb8 },
++	{ 0x28, 0x38 }, { 0x29, 0x38 }, { 0x2a, 0xb8 }, { 0x2b, 0x80 },
+ 	{ 0x2c, 0x38 }, { 0x2d, 0x00 }, { 0x2e, 0x00 }, { 0x2f, 0x00 },
+-	{ 0x30, 0x00 }, { 0x31, 0x00 }, { 0x32, 0x00 }, { 0x33, 0x00 },
++	{ 0x30, 0x18 }, { 0x31, 0x18 }, { 0x32, 0x00 }, { 0x33, 0x00 },
+ 	{ 0x34, 0x00 }, { 0x35, 0x00 }, { 0x36, 0x00 }, { 0x37, 0x00 },
+ };
+ 
+@@ -129,6 +135,7 @@
+ 	unsigned int sysclk;
+ 	bool muted;
+ 	bool round46_hw_params_logged;
++	bool resume_failed;
+ };
+ 
+ struct es8323_reg_sequence {
+@@ -185,7 +192,7 @@
+ 
+ 	if (es8323->speaker_enable)
+ 		gpiod_set_value_cansleep(es8323->speaker_enable,
+-					 !headphones);
++					 !headphones && !es8323->resume_failed);
+ }
+ 
+ static irqreturn_t es8323_headphone_irq(int irq, void *data)
+@@ -305,6 +312,9 @@
+ 	unsigned int rate_coeff;
+ 	int coeff;
+ 
++	if (READ_ONCE(es8323->resume_failed))
++		return -EIO;
++
+ 	if (params_format(params) != SNDRV_PCM_FORMAT_S16_LE)
+ 		return -EINVAL;
+ 
+@@ -342,6 +352,10 @@
+ 	int ret;
+ 
+ 	mutex_lock(&es8323->lock);
++	if (!mute && es8323->resume_failed) {
++		ret = -EIO;
++		goto out_unlock;
++	}
+ 	es8323->muted = mute;
+ 
+ 	if (mute) {
+@@ -359,6 +373,7 @@
+ 		}
+ 	}
+ 
++out_unlock:
+ 	mutex_unlock(&es8323->lock);
+ 	return ret;
+ }
+@@ -436,14 +451,19 @@
+ 
+ 	mutex_lock(&es8323->lock);
+ 	es8323->muted = true;
++	es8323->resume_failed = true;
+ 	if (es8323->speaker_enable)
+ 		gpiod_set_value_cansleep(es8323->speaker_enable, 0);
++
++	/* Power down hardware without replacing the desired runtime cache. */
++	regcache_cache_bypass(es8323->regmap, true);
+ 	regmap_write(es8323->regmap, ES8323_DACCONTROL3, 0x06);
+ 	regmap_write(es8323->regmap, ES8323_LOUT2VOL, 0x00);
+ 	regmap_write(es8323->regmap, ES8323_ROUT2VOL, 0x00);
+ 	regmap_write(es8323->regmap, ES8323_ADCPOWER, 0xff);
+ 	regmap_write(es8323->regmap, ES8323_DACPOWER, 0xc0);
+ 	regmap_write(es8323->regmap, ES8323_CHIPPOWER, 0xf3);
++	regcache_cache_bypass(es8323->regmap, false);
+ 	regcache_cache_only(es8323->regmap, true);
+ 	regcache_mark_dirty(es8323->regmap);
+ 	mutex_unlock(&es8323->lock);
+@@ -458,11 +478,28 @@
+ 
+ 	mutex_lock(&es8323->lock);
+ 	regcache_cache_only(es8323->regmap, false);
++
++	/* Re-establish safe vendor state without replacing desired cache. */
++	regcache_cache_bypass(es8323->regmap, true);
+ 	ret = es8323_write_sequence(es8323);
+ 	es8323->muted = true;
+ 	if (!ret)
+ 		ret = regmap_write(es8323->regmap, ES8323_DACCONTROL3, 0x06);
+-	es8323_update_speaker(es8323);
++	regcache_cache_bypass(es8323->regmap, false);
++	if (!ret)
++		ret = regcache_sync(es8323->regmap);
++	if (ret) {
++		es8323->resume_failed = true;
++		if (es8323->speaker_enable)
++			gpiod_set_value_cansleep(es8323->speaker_enable, 0);
++		regcache_cache_bypass(es8323->regmap, true);
++		regmap_write(es8323->regmap, ES8323_DACCONTROL3, 0x06);
++		regcache_cache_bypass(es8323->regmap, false);
++		dev_err(component->dev, "ES8323 resume restore failed: %d\n", ret);
++	} else {
++		es8323->resume_failed = false;
++		es8323_update_speaker(es8323);
++	}
+ 	mutex_unlock(&es8323->lock);
+ 
+ 	return ret;
+@@ -485,6 +522,9 @@
+ static const struct regmap_config es8323_regmap_config = {
+ 	.reg_bits = 8,
+ 	.val_bits = 8,
++	/* ES8323 control frames carry one register value per transfer. */
++	.use_single_read = true,
++	.use_single_write = true,
+ 	.max_register = ES8323_MAX_REGISTER,
+ 	.reg_defaults = es8323_reg_defaults,
+ 	.num_reg_defaults = ARRAY_SIZE(es8323_reg_defaults),

@@ -1,0 +1,23 @@
+
+# USB 模式状态提示布局。修改后重启，或执行 gkd-ui-layout apply 立即生效。
+# 文字左上角坐标；四种提示（充电、大容量、调试、共享网络 IP）共用。
+ui_status_text_x=34
+ui_status_text_y=211
+# 图标左上角坐标与像素尺寸；默认 13x11，与现有模式图标一致。
+ui_status_icon_x=15
+ui_status_icon_y=210
+ui_status_icon_width=13
+ui_status_icon_height=11
+
+# 充电模式下的 Windows ICS 网络共享。以下默认值已在 Windows ICS 实机验证。
+usb_internet_interface=usb0
+usb_internet_device_ip=192.168.137.2
+usb_internet_gateway=192.168.137.1
+usb_internet_prefix_length=24
+usb_internet_poll_seconds=2
+usb_internet_health_timeout_seconds=2
+usb_internet_enable_timeout_seconds=4
+usb_internet_panel_lease_ms=5000
+# 显式用户 SSH 仅监听共享地址；救援 SSH 的 10.1.1.2 设置不在此处。
+usb_internet_ssh_port=22
+usb_internet_ssh_idle_seconds=600

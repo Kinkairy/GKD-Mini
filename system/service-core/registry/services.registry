@@ -1,0 +1,9 @@
+# name|init|owners|depends|order|pidfile|pidformat|refresh|safe_point
+ui-layout|/etc/init.d/S89gkd-ui-layout|ui-layout||10||oneshot|restart|action-idle
+hardware|/etc/init.d/S99daemon.sh|hardware||20|/var/run/gkd_hardware_daemon.pid|plain|restart|transaction-idle
+power-menu|/etc/init.d/S94gkd-power-menu|power-menu|hardware|30|/run/gkd-power-menu/supervisor.pid|pair|restart|transaction-idle
+screenshot|/etc/init.d/S94gkd-screenshot|screenshot|hardware|40|/run/gkd-screenshot.pid|plain|restart|action-idle
+input|/etc/init.d/S95gkd-input|input-stack|hardware|50|/var/run/gkd-input.pid|plain|restart|keys-released
+battery|/etc/init.d/S96gkd-battery-notify|battery,ui-stack|hardware,ui-layout|60|/var/run/gkd-battery-notify.pid|plain|restart|action-idle
+usb-internet|/etc/init.d/S97gkd-usb-internet-auto|usb-internet|ui-layout|70|/run/gkd-usb-internet-auto/supervisor.pid|pair|restart|network-rebuild
+usb-chooser|/etc/init.d/S93gkd-usb-chooser|usb,ui-stack|input,ui-layout|80|/run/gkd-usb-chooser/supervisor.pid|pair|restart|transaction-idle

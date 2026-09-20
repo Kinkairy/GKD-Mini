@@ -1,0 +1,15 @@
+--- a/arch/mips/ingenic/board-ingenic.c
++++ b/arch/mips/ingenic/board-ingenic.c
+@@ -81,7 +81,11 @@
+ 		early_init_dt_add_memory_arch(0, SZ_32M);
+ 
+ 	mips_machtype = (unsigned long)match_data;
+-	system_type = ingenic_get_system_type(mips_machtype);
++	/* Use the existing DT model reader for the handheld board identity. */
++	if (!fdt_node_check_compatible(fdt, 0, "gamekiddy,gkd350"))
++		system_type = NULL;
++	else
++		system_type = ingenic_get_system_type(mips_machtype);
+ 
+ 	return fdt;
+ }

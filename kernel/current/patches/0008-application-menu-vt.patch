@@ -1,0 +1,62 @@
+--- a/drivers/tty/vt/keyboard.c
++++ b/drivers/tty/vt/keyboard.c
+@@ -1530,6 +1530,8 @@
+ 		kbd->slockstate = 0;
+ }
+ 
++#include "gkd-menu-vt.inc"
++
+ static void kbd_event(struct input_handle *handle, unsigned int event_type,
+ 		      unsigned int event_code, int value)
+ {
+@@ -1540,7 +1542,7 @@
+ 			kbd_is_hw_raw(handle->dev))
+ 		kbd_rawcode(value);
+ 	if (event_type == EV_KEY && event_code <= KEY_MAX)
+-		kbd_keycode(event_code, value, kbd_is_hw_raw(handle->dev));
++		gkd_menu_key(handle, event_code, value);
+ 
+ 	spin_unlock(&kbd_event_lock);
+ 
+@@ -1585,6 +1587,8 @@
+ 	handle->dev = dev;
+ 	handle->handler = handler;
+ 	handle->name = "kbd";
++	handle->private = bitmap_zalloc(KEY_CNT, GFP_KERNEL);
++	if (!handle->private) { kfree(handle);return -ENOMEM; }
+ 
+ 	error = input_register_handle(handle);
+ 	if (error)
+@@ -1593,12 +1597,16 @@
+ 	error = input_open_device(handle);
+ 	if (error)
+ 		goto err_unregister_handle;
++	gkd_menu_sync(handle);
+ 
+ 	return 0;
+ 
+  err_unregister_handle:
++	gkd_menu_disconnect(handle);
++	handle->private = NULL;
+ 	input_unregister_handle(handle);
+  err_free_handle:
++	kfree(handle->private);
+ 	kfree(handle);
+ 	return error;
+ }
+@@ -1606,6 +1614,7 @@
+ static void kbd_disconnect(struct input_handle *handle)
+ {
+ 	input_close_device(handle);
++	gkd_menu_disconnect(handle);
+ 	input_unregister_handle(handle);
+ 	kfree(handle);
+ }
+@@ -1616,6 +1625,7 @@
+  */
+ static void kbd_start(struct input_handle *handle)
+ {
++	gkd_menu_sync(handle);
+ 	tasklet_disable(&keyboard_tasklet);
+ 
+ 	if (ledstate != -1U)

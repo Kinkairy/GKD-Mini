@@ -1,0 +1,213 @@
+--- a/drivers/input/keyboard/gkd-axp173-pek.c
++++ b/drivers/input/keyboard/gkd-axp173-pek.c
+@@ -11,12 +11,24 @@
+ #include <linux/of.h>
+ #include <linux/pm.h>
+ #include <linux/pm_wakeup.h>
++#include <linux/err.h>
++#if IS_ENABLED(CONFIG_FB_X1830_USER_PLANE) && IS_ENABLED(CONFIG_POWER_SUPPLY)
++#include <linux/power_supply.h>
++#define GKD_AXP173_APP_POWER 1
++#endif
+ #include <linux/property.h>
+ #include <linux/string.h>
+ 
+ #define AXP173_IRQ_ENABLE	0x40
+ #define AXP173_IRQ_STATUS	0x44
+ #define AXP173_IRQ_BYTES	4
++
++#ifdef GKD_AXP173_APP_POWER
++#define AXP173_CHARGE_STATUS		0x00 /* X1000 POWER20_STATUS */
++#define AXP173_STATUS_USB_VALID	BIT(4) /* X1000 AXP_STATUS_USBVA */
++#define AXP173_BATTERY_VOLTAGE_H	0x78
++#define AXP173_BATTERY_VOLTAGE_L	0x79
++#endif
+ #define AXP173_PEK_LONG		BIT(0)
+ #define AXP173_PEK_SHORT		BIT(1)
+ 
+@@ -29,8 +41,117 @@
+ 	bool saved_valid;
+ 	bool original_valid;
+ 	bool wake_armed;
++#ifdef GKD_AXP173_APP_POWER
++	struct power_supply *battery;
++	struct power_supply *usb;
++	bool telemetry_suspended;
++#endif
+ };
+ 
++#ifdef GKD_AXP173_APP_POWER
++static int gkd_axp173_read_byte(struct gkd_axp173 *axp, u8 reg, u8 *value)
++{
++	int ret = i2c_smbus_read_byte_data(axp->client, reg);
++
++	if (ret < 0)
++		return ret;
++	*value = ret;
++	return 0;
++}
++
++static int gkd_axp173_battery_get_property(struct power_supply *psy,
++		enum power_supply_property property,
++		union power_supply_propval *value)
++{
++	struct gkd_axp173 *axp = power_supply_get_drvdata(psy);
++	u8 high, low;
++	int ret = 0;
++	int microvolts;
++
++	mutex_lock(&axp->lock);
++	if (axp->telemetry_suspended) {
++		ret = -EAGAIN;
++		goto out;
++	}
++	switch (property) {
++	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
++		ret = gkd_axp173_read_byte(axp, AXP173_BATTERY_VOLTAGE_H, &high);
++		if (!ret)
++			ret = gkd_axp173_read_byte(axp, AXP173_BATTERY_VOLTAGE_L, &low);
++		if (ret)
++			break;
++		microvolts = (((int)high << 4) | (low & 0x0f)) * 1100;
++		if (microvolts < 2500000 || microvolts > 5000000)
++			ret = -ENODATA;
++		else
++			value->intval = microvolts;
++		break;
++	default:
++		ret = -EINVAL;
++	}
++out:
++	mutex_unlock(&axp->lock);
++	return ret;
++}
++
++static int gkd_axp173_usb_get_property(struct power_supply *psy,
++		enum power_supply_property property,
++		union power_supply_propval *value)
++{
++	struct gkd_axp173 *axp = power_supply_get_drvdata(psy);
++	u8 status;
++	int ret;
++
++	if (property != POWER_SUPPLY_PROP_ONLINE)
++		return -EINVAL;
++	mutex_lock(&axp->lock);
++	if (axp->telemetry_suspended)
++		ret = -EAGAIN;
++	else {
++		ret = gkd_axp173_read_byte(axp, AXP173_CHARGE_STATUS, &status);
++		if (!ret)
++			value->intval = !!(status & AXP173_STATUS_USB_VALID);
++	}
++	mutex_unlock(&axp->lock);
++	return ret;
++}
++
++static enum power_supply_property gkd_axp173_battery_properties[] = {
++	POWER_SUPPLY_PROP_VOLTAGE_NOW,
++};
++static enum power_supply_property gkd_axp173_usb_properties[] = {
++	POWER_SUPPLY_PROP_ONLINE,
++};
++static const struct power_supply_desc gkd_axp173_battery_desc = {
++	.name = "battery", .type = POWER_SUPPLY_TYPE_BATTERY,
++	.properties = gkd_axp173_battery_properties,
++	.num_properties = ARRAY_SIZE(gkd_axp173_battery_properties),
++	.get_property = gkd_axp173_battery_get_property,
++};
++static const struct power_supply_desc gkd_axp173_usb_desc = {
++	.name = "usb", .type = POWER_SUPPLY_TYPE_USB,
++	.properties = gkd_axp173_usb_properties,
++	.num_properties = ARRAY_SIZE(gkd_axp173_usb_properties),
++	.get_property = gkd_axp173_usb_get_property,
++};
++
++static int gkd_axp173_register_supplies(struct gkd_axp173 *axp)
++{
++	struct power_supply_config config = {
++		.drv_data = axp,
++		.of_node = axp->client->dev.of_node,
++	};
++
++	axp->battery = devm_power_supply_register(&axp->client->dev,
++			&gkd_axp173_battery_desc, &config);
++	if (IS_ERR(axp->battery))
++		return PTR_ERR(axp->battery);
++	axp->usb = devm_power_supply_register(&axp->client->dev,
++			&gkd_axp173_usb_desc, &config);
++	return IS_ERR(axp->usb) ? PTR_ERR(axp->usb) : 0;
++}
++#endif
++
+ static int gkd_axp173_read(struct gkd_axp173 *axp, u8 reg, u8 values[4])
+ {
+ 	int ret;
+@@ -199,6 +320,9 @@
+ 
+ 	disable_irq(axp->client->irq);
+ 	mutex_lock(&axp->lock);
++#ifdef GKD_AXP173_APP_POWER
++	axp->telemetry_suspended = true;
++#endif
+ 
+ 	ret = gkd_axp173_read(axp, AXP173_IRQ_ENABLE, axp->saved_enable);
+ 	if (ret)
+@@ -251,6 +375,10 @@
+ 	dev_err(dev, "suspend setup failed at %s: %d, readback=%02x/%02x/%02x/%02x\n",
+ 		stage, ret, readback[0], readback[1], readback[2], readback[3]);
+ out:
++#ifdef GKD_AXP173_APP_POWER
++	if (ret)
++		axp->telemetry_suspended = false;
++#endif
+ 	mutex_unlock(&axp->lock);
+ 	if (irq_safe)
+ 		enable_irq(axp->client->irq);
+@@ -290,6 +418,9 @@
+ 	}
+ 	restore_ret = gkd_axp173_restore_enable(axp);
+ 	irq_safe = !axp->saved_valid;
++#ifdef GKD_AXP173_APP_POWER
++	axp->telemetry_suspended = false;
++#endif
+ 	mutex_unlock(&axp->lock);
+ 	if (irq_safe)
+ 		enable_irq(axp->client->irq);
+@@ -359,15 +490,20 @@
+ 	struct device *dev = &client->dev;
+ 	struct gkd_axp173 *axp;
+ 	u8 readback[AXP173_IRQ_BYTES];
++	unsigned long required_i2c;
+ 	int ret;
+ 	int restore_ret;
+ 
+ 	if (client->irq <= 0)
+ 		return -EINVAL;
+ 
+-	if (!i2c_check_functionality(client->adapter,
+-				     I2C_FUNC_SMBUS_READ_I2C_BLOCK |
+-				     I2C_FUNC_SMBUS_WRITE_BYTE_DATA))
++	required_i2c = I2C_FUNC_SMBUS_READ_I2C_BLOCK |
++		I2C_FUNC_SMBUS_WRITE_BYTE_DATA;
++
++#ifdef GKD_AXP173_APP_POWER
++	required_i2c |= I2C_FUNC_SMBUS_READ_BYTE_DATA;
++#endif
++	if (!i2c_check_functionality(client->adapter, required_i2c))
+ 		return dev_err_probe(dev, -EOPNOTSUPP,
+ 				     "adapter lacks required SMBus transactions\n");
+ 
+@@ -414,6 +550,12 @@
+ 
+ 	dev_info(dev, "requesting AXP173 IRQ %d trigger 0x%x\n",
+ 		 client->irq, irq_get_trigger_type(client->irq));
++#ifdef GKD_AXP173_APP_POWER
++	ret = gkd_axp173_register_supplies(axp);
++	if (ret)
++		goto restore_original;
++#endif
++
+ 	ret = devm_request_threaded_irq(dev, client->irq, NULL,
+ 					gkd_axp173_irq_thread,
+ 					IRQF_ONESHOT | IRQF_TRIGGER_LOW,

@@ -1,0 +1,760 @@
+diff --git a/drivers/video/fbdev/Kconfig b/drivers/video/fbdev/Kconfig
+index c5b37115f..86479d331 100644
+--- a/drivers/video/fbdev/Kconfig
++++ b/drivers/video/fbdev/Kconfig
+@@ -2228,6 +2228,15 @@ config FB_INGENIC_X1830_DPU
+ 	  This is deliberately independent of the older JZ47xx LCDC DRM
+ 	  driver: the X1830 DPU uses a different register and descriptor ABI.
+ 
++config FB_X1830_USER_PLANE
++	bool "Application-owned GKD X1830 userspace UI plane"
++	depends on FB_INGENIC_X1830_DPU=y
++	default n
++	help
++	  Expose the fixed GKD Mini OSD plane ioctl and permanently select it as
++	  the only System UI overlay source. This is an application-profile-only
++	  option; recovery and normal builds retain the accepted legacy surfaces.
++
+ config FB_SSD1307
+ 	tristate "Solomon SSD1307 framebuffer support"
+ 	depends on FB && I2C
+diff --git a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+--- a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
++++ b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+@@ -8,6 +8,7 @@
+  */
+ 
+ #include <linux/backlight.h>
++#include <linux/capability.h>
+ #include <linux/bitops.h>
+ #include <linux/build_bug.h>
+ #include <linux/clk.h>
+@@ -22,6 +23,11 @@
+ #include <linux/iopoll.h>
+ #include <linux/kernel.h>
+ #include <linux/mm.h>
++#include <linux/gkd-ui-pixels.h>
++#include <uapi/linux/gkd-ui-plane.h>
++#include <linux/pid.h>
++#include <linux/string.h>
++#include <linux/uaccess.h>
+ #include <linux/module.h>
+ #include <linux/mutex.h>
+ #include <linux/of.h>
+@@ -230,6 +236,22 @@
+ 	struct delayed_work volume_osd_clear_work;
+ 	unsigned long volume_osd_expires;
+ 	bool volume_osd_removing;
++	u16 *user_menu_virt;
++	struct pid *user_menu_owner;
++	u32 user_menu_sequence;
++	unsigned long user_menu_expires, user_menu_started;
++	u32 user_menu_transition_ms, user_menu_animation_ms;
++	u32 user_menu_from_rows;
++	bool user_menu_closing;
++	u32 *user_plane_virt;
++	struct pid *user_plane_owner;
++	u32 user_plane_sequence;
++	unsigned long user_plane_started;
++	unsigned long user_plane_expires;
++	u32 user_plane_ttl_ms;
++	u32 user_plane_fade_ms;
++	bool user_plane_active;
++	bool user_plane_fade_done;
+ 	int irq;
+ 	bool backlight_on;
+ 	bool panel_powered;
+@@ -551,6 +573,119 @@
+ 		}
+ }
+ 
++static void x1830_user_menu_release_locked(struct x1830_fb *fb)
++{
++	kvfree(fb->user_menu_virt);
++	fb->user_menu_virt = NULL;
++	put_pid(fb->user_menu_owner);
++	fb->user_menu_owner = NULL;
++	fb->user_menu_sequence = 0;
++	fb->user_menu_expires = 0;
++	fb->user_menu_started = 0;
++	fb->user_menu_transition_ms = 0;
++	fb->user_menu_animation_ms = 0;
++	fb->user_menu_from_rows = 0;
++	fb->user_menu_closing = false;
++}
++
++static bool x1830_user_menu_live_locked(struct x1830_fb *fb)
++{
++	if (!fb->user_menu_owner)
++		return false;
++	if (time_before(jiffies, fb->user_menu_expires))
++		return true;
++	x1830_user_menu_release_locked(fb);
++	return false;
++}
++
++static unsigned x1830_user_menu_rows_locked(struct x1830_fb *fb)
++{
++	unsigned elapsed, remaining, span, rows, exit_rows;
++	unsigned long now = jiffies;
++
++	if (!fb->user_menu_owner)
++		return 0;
++	if (!time_before(now, fb->user_menu_expires)) {
++		x1830_user_menu_release_locked(fb);
++		return 0;
++	}
++	elapsed = jiffies_to_msecs(now - fb->user_menu_started);
++	remaining = jiffies_to_msecs(fb->user_menu_expires - now);
++	span = fb->user_menu_animation_ms;
++	if (!span || elapsed >= span)
++		rows = fb->user_menu_closing ? 0 : GKD_UI_MENU_HEIGHT;
++	else if (fb->user_menu_closing)
++		rows = fb->user_menu_from_rows * (span - elapsed) / span;
++	else
++		rows = fb->user_menu_from_rows +
++			(GKD_UI_MENU_HEIGHT - fb->user_menu_from_rows) * elapsed / span;
++	/* An expired publisher still exits within its original bounded lease. */
++	if (!fb->user_menu_closing && fb->user_menu_transition_ms &&
++	    remaining < fb->user_menu_transition_ms) {
++		exit_rows = GKD_UI_MENU_HEIGHT * remaining / fb->user_menu_transition_ms;
++		if (exit_rows < rows)
++			rows = exit_rows;
++	}
++	return rows;
++}
++
++static void x1830_user_plane_release_locked(struct x1830_fb *fb)
++{
++	put_pid(fb->user_plane_owner);
++	fb->user_plane_owner = NULL;
++	fb->user_plane_sequence = 0;
++	fb->user_plane_started = 0;
++	fb->user_plane_expires = 0;
++	fb->user_plane_ttl_ms = 0;
++	fb->user_plane_fade_ms = 0;
++	fb->user_plane_active = false;
++	fb->user_plane_fade_done = false;
++	memset(fb->user_plane_virt, 0, GKD_UI_PLANE_BYTES);
++}
++
++static bool x1830_user_plane_live_locked(struct x1830_fb *fb)
++{
++	if (!fb->user_plane_active)
++		return false;
++	if (time_before(jiffies, fb->user_plane_expires))
++		return true;
++	x1830_user_plane_release_locked(fb);
++	return false;
++}
++
++static void x1830_user_plane_blend_locked(struct x1830_fb *fb, u16 *target)
++{
++	unsigned long now = jiffies;
++	unsigned elapsed_ms, remaining_ms, opacity = 0;
++	unsigned int row, column;
++
++	if (!x1830_user_plane_live_locked(fb))
++		return;
++	if (!fb->user_plane_fade_done &&
++	    time_after_eq(now, fb->user_plane_started +
++			  msecs_to_jiffies(fb->user_plane_fade_ms)))
++		fb->user_plane_fade_done = true;
++	elapsed_ms = !fb->user_plane_fade_done ?
++		jiffies_to_msecs(now - fb->user_plane_started) :
++		fb->user_plane_fade_ms;
++	remaining_ms = jiffies_to_msecs(fb->user_plane_expires - now);
++	if (gkd_ui_fade_value(elapsed_ms, remaining_ms,
++			      fb->user_plane_fade_ms, &opacity))
++		return;
++	for (row = 0; row < GKD_UI_PLANE_HEIGHT; ++row)
++		for (column = 0; column < GKD_UI_PLANE_WIDTH; ++column) {
++			u32 top = fb->user_plane_virt[row * GKD_UI_PLANE_WIDTH + column];
++			u16 *base = &target[(GKD_UI_PLANE_Y + row) * X1830_FB_XRES +
++					   GKD_UI_PLANE_X + column];
++			u16 color = (u16)((((top >> 16) & 0xffU) >> 3) << 11 |
++					  (((top >> 8) & 0xffU) >> 2) << 5 |
++					  ((top & 0xffU) >> 3));
++			u16 composed = gkd_ui_blend565_value(*base, color, top >> 24);
++
++			*base = gkd_ui_blend565_value(*base, composed, opacity);
++		}
++}
++
+ /*
+  * Keep userspace's two RGB565 pages untouched.  Copy the selected page into
+  * an isolated coherent scanout, blend the System UI there, and let hardware
+@@ -566,8 +701,12 @@
+ 	u16 *target;
+ 	u32 *overlay = fb->menu_osd_virt;
+ 	u8 next = fb->composite_front ^ 1U;
+-
+-	if (fb->usb_debug_frozen_valid) {
++	unsigned menu_rows = IS_ENABLED(CONFIG_FB_X1830_USER_PLANE) ?
++		x1830_user_menu_rows_locked(fb) : 0;
++
++	if (menu_rows == GKD_UI_MENU_HEIGHT) {
++		source = fb->user_menu_virt;
++	} else if (fb->usb_debug_frozen_valid) {
+ 		source = fb->usb_debug_frozen_virt;
+ 	} else {
+ 		if (WARN_ON_ONCE(source_addr < fb_addr ||
+@@ -580,25 +719,32 @@
+ 	target = (u16 *)((u8 *)fb->composite_virt +
+ 			 next * X1830_FB_FRAME_SIZE);
+ 	memcpy(target, source, X1830_FB_FRAME_SIZE);
+-	if (time_before(jiffies, fb->volume_osd_expires))
+-		x1830_blend_rect(target, overlay, X1830_VOLUME_OSD_X,
+-				 X1830_VOLUME_OSD_Y, X1830_VOLUME_OSD_WIDTH,
+-				 X1830_VOLUME_OSD_HEIGHT);
+-	if (time_before(jiffies, fb->menu_expires)) {
+-		if (fb->menu_view == X1830_MENU_EJECT_CONFIRM)
+-			x1830_blend_rect(target, overlay, 92, 101, 136, 38);
+-		else if (fb->menu_view == X1830_MENU_CHARGE ||
+-		    fb->menu_view == X1830_MENU_STORAGE_DISABLED)
+-			x1830_blend_rect(target, overlay, 8, 206, 94, 22);
+-		else if (fb->menu_view == X1830_MENU_STORAGE ||
+-		    fb->menu_view == X1830_MENU_DEBUG)
+-			/* Exit-only B keycap spans x=98..108, matching menu A's right inset. */
+-			x1830_blend_rect(target, overlay, 8, 206, 109, 22);
+-		else if (fb->menu_view != X1830_MENU_HIDDEN)
+-			x1830_blend_rect(target, overlay, 66, 62, 188, 116);
+-	}
+-	if (time_before(jiffies, fb->power_osd_expires))
+-		x1830_blend_rect(target, overlay, 218, 206, 94, 22);
++	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
++		if (menu_rows && menu_rows < GKD_UI_MENU_HEIGHT)
++			memcpy(target, fb->user_menu_virt +
++			       (GKD_UI_MENU_HEIGHT - menu_rows) * GKD_UI_MENU_WIDTH,
++			       menu_rows * GKD_UI_MENU_WIDTH * sizeof(*target));
++		x1830_user_plane_blend_locked(fb, target);
++	} else {
++		if (time_before(jiffies, fb->volume_osd_expires))
++			x1830_blend_rect(target, overlay, X1830_VOLUME_OSD_X,
++					 X1830_VOLUME_OSD_Y, X1830_VOLUME_OSD_WIDTH,
++					 X1830_VOLUME_OSD_HEIGHT);
++		if (time_before(jiffies, fb->menu_expires)) {
++			if (fb->menu_view == X1830_MENU_EJECT_CONFIRM)
++				x1830_blend_rect(target, overlay, 92, 101, 136, 38);
++			else if (fb->menu_view == X1830_MENU_CHARGE ||
++				 fb->menu_view == X1830_MENU_STORAGE_DISABLED)
++				x1830_blend_rect(target, overlay, 8, 206, 94, 22);
++			else if (fb->menu_view == X1830_MENU_STORAGE ||
++				 fb->menu_view == X1830_MENU_DEBUG)
++				x1830_blend_rect(target, overlay, 8, 206, 109, 22);
++			else if (fb->menu_view != X1830_MENU_HIDDEN)
++				x1830_blend_rect(target, overlay, 66, 62, 188, 116);
++		}
++		if (time_before(jiffies, fb->power_osd_expires))
++			x1830_blend_rect(target, overlay, 218, 206, 94, 22);
++	}
+ 	dma_wmb();
+ 	fb->composite_front = next;
+ 	return lower_32_bits(fb->composite_dma +
+@@ -607,10 +753,18 @@
+ 
+ static bool x1830_overlay_active_locked(struct x1830_fb *fb)
+ {
++	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
++		bool menu = x1830_user_menu_live_locked(fb);
++		bool osd = x1830_user_plane_live_locked(fb);
++
++		/* Evaluate both leases even when the other remains visible. A DEBUG
++		 * frozen underlay must stay selected after the final UI lease ends. */
++		return menu || osd || fb->usb_debug_frozen_valid;
++	}
+ 	return time_before(jiffies, fb->volume_osd_expires) ||
+-		time_before(jiffies, fb->power_osd_expires) ||
+-		(fb->menu_view != X1830_MENU_HIDDEN &&
+-		 time_before(jiffies, fb->menu_expires));
++	       time_before(jiffies, fb->power_osd_expires) ||
++	       (fb->menu_view != X1830_MENU_HIDDEN &&
++		time_before(jiffies, fb->menu_expires));
+ }
+ 
+ /*
+@@ -788,6 +942,31 @@
+ 
+ 	mutex_lock(&fb->volume_osd_lock);
+ 	if (fb->volume_osd_removing) goto out_unlock;
++	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
++		if (!time_before(jiffies, fb->menu_expires) &&
++		    !x1830_debug_loading_hold_locked(fb)) {
++			fb->menu_expires = 0;
++			if (fb->menu_view == X1830_MENU_CHOOSER ||
++			    fb->menu_view == X1830_MENU_DEBUG)
++				x1830_menu_unfreeze_locked(fb);
++			fb->menu_view = X1830_MENU_HIDDEN;
++			x1830_debug_frozen_release_locked(fb);
++			x1830_hardware_osd_reassert_locked(fb,
++				fb->latest_scanout_addr);
++		}
++		deadline = 0;
++		if (fb->menu_expires &&
++		    time_before(jiffies, fb->menu_expires))
++			deadline = fb->menu_expires;
++		else if (fb->usb_debug_loading_active &&
++			 time_before(jiffies,
++				     fb->usb_debug_loading_hard_expires))
++			deadline = fb->usb_debug_loading_hard_expires;
++		if (deadline)
++			mod_delayed_work(system_wq, &fb->volume_osd_clear_work,
++				x1830_menu_delay(deadline));
++		goto out_unlock;
++	}
+ 	/* Expire each surface before selecting the next deadline.  Never return
+ 	 * early merely because the other surface still has a future lease. */
+ 	if (!time_before(jiffies, fb->volume_osd_expires)) {
+@@ -821,6 +1000,7 @@
+ 	mutex_unlock(&fb->volume_osd_lock);
+ }
+ 
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ static ssize_t gkd_volume_osd_store(struct device *dev,
+ 				    struct device_attribute *attribute,
+ 				    const char *buffer, size_t count)
+@@ -949,6 +1129,7 @@
+ }
+ 
+ static DEVICE_ATTR_WO(gkd_notification);
++#endif
+ 
+ /*
+  * Export the exact RGB565 frame selected for TFT scanout.  Offset zero takes
+@@ -1689,6 +1870,7 @@
+ 	return true;
+ }
+ 
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ static ssize_t gkd_usb_menu_store(struct device *dev, struct device_attribute *attr,
+ 				  const char *buffer, size_t count)
+ {
+@@ -1952,6 +2134,7 @@
+ 	return count;
+ }
+ static DEVICE_ATTR_WO(gkd_usb_menu);
++#endif
+ static bool x1830_network_label_valid(const char *label, size_t length)
+ {
+ 	unsigned int octet = 0, digits = 0, dots = 0, index;
+@@ -1979,6 +2162,7 @@
+ 	return dots == 3U && digits > 0U;
+ }
+ 
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ static ssize_t gkd_network_status_store(struct device *dev,
+ 					struct device_attribute *attr,
+ 					const char *buffer, size_t count)
+@@ -2035,6 +2219,7 @@
+ 	return count;
+ }
+ static DEVICE_ATTR_WO(gkd_network_status);
++#endif
+ static ssize_t gkd_runtime_id_show(struct device *dev,
+ 					struct device_attribute *attr, char *buffer)
+ {
+@@ -2060,6 +2245,7 @@
+ }
+ static DEVICE_ATTR_RO(gkd_resume_state);
+ 
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ static ssize_t gkd_power_osd_store(struct device *dev,
+ 				   struct device_attribute *attribute,
+ 				   const char *buffer, size_t count)
+@@ -2102,6 +2288,7 @@
+ 	return count;
+ }
+ static DEVICE_ATTR_WO(gkd_power_osd);
++#endif
+ 
+ static ssize_t gkd_battery_label_write(struct file *file, struct kobject *kobj,
+ 				       struct bin_attribute *attribute, char *buffer,
+@@ -2517,6 +2704,264 @@
+ 				  vma->vm_page_prot);
+ }
+ 
++static int gkd_ui_plane_get_caps(unsigned long arg)
++{
++	const struct gkd_ui_plane_caps caps = {
++		.abi = GKD_UI_PLANE_ABI, .x = GKD_UI_PLANE_X,
++		.y = GKD_UI_PLANE_Y, .width = GKD_UI_PLANE_WIDTH,
++		.height = GKD_UI_PLANE_HEIGHT, .format = GKD_UI_PLANE_ARGB8888,
++		.max_ttl_ms = GKD_UI_PLANE_MAX_TTL_MS,
++		.max_fade_ms = GKD_UI_PLANE_MAX_FADE_MS,
++	};
++
++	return copy_to_user((void __user *)arg, &caps, sizeof(caps)) ? -EFAULT : 0;
++}
++
++static int gkd_ui_plane_submit_ioctl(struct x1830_fb *fb, unsigned long arg)
++{
++	struct gkd_ui_plane_submit submit;
++	struct pid *owner = task_tgid(current);
++	u32 *pixels;
++	bool renewing;
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	if (copy_from_user(&submit, (void __user *)arg, sizeof(submit)))
++		return -EFAULT;
++	if (!submit.pixels || upper_32_bits(submit.pixels) ||
++	    submit.pixel_bytes != GKD_UI_PLANE_BYTES ||
++	    submit.ttl_ms < GKD_UI_PLANE_MIN_TTL_MS ||
++	    submit.ttl_ms > GKD_UI_PLANE_MAX_TTL_MS ||
++	    submit.fade_ms > GKD_UI_PLANE_MAX_FADE_MS ||
++	    !submit.sequence || submit.reserved[0] || submit.reserved[1])
++		return -EINVAL;
++	pixels = memdup_user(u64_to_user_ptr(submit.pixels), GKD_UI_PLANE_BYTES);
++	if (IS_ERR(pixels))
++		return PTR_ERR(pixels);
++
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing) {
++		ret = -ENODEV;
++		goto out_unlock;
++	}
++	renewing = x1830_user_plane_live_locked(fb);
++	if (renewing && fb->user_plane_owner != owner) {
++		ret = -EBUSY;
++		goto out_unlock;
++	}
++	if (renewing && submit.sequence <= fb->user_plane_sequence) {
++		ret = -ESTALE;
++		goto out_unlock;
++	}
++	if (!renewing) {
++		put_pid(fb->user_plane_owner);
++		fb->user_plane_owner = get_pid(owner);
++		fb->user_plane_started = jiffies;
++		fb->user_plane_fade_done = false;
++	}
++	memcpy(fb->user_plane_virt, pixels, GKD_UI_PLANE_BYTES);
++	fb->user_plane_sequence = submit.sequence;
++	fb->user_plane_ttl_ms = submit.ttl_ms;
++	fb->user_plane_fade_ms = submit.fade_ms;
++	fb->user_plane_expires = jiffies + msecs_to_jiffies(submit.ttl_ms);
++	fb->user_plane_active = true;
++	dma_wmb();
++	if (fb->composite_active)
++		mod_delayed_work(system_highpri_wq, &fb->composite_work, 0);
++	else
++		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++out_unlock:
++	mutex_unlock(&fb->volume_osd_lock);
++	kfree(pixels);
++	return ret;
++}
++
++static int gkd_ui_plane_clear_ioctl(struct x1830_fb *fb)
++{
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing)
++		ret = -ENODEV;
++	else if (x1830_user_plane_live_locked(fb) &&
++		 fb->user_plane_owner != task_tgid(current))
++		ret = -EBUSY;
++	else {
++		x1830_user_plane_release_locked(fb);
++		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	}
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++
++static int gkd_ui_menu_get_caps(unsigned long arg)
++{
++	const struct gkd_ui_menu_caps caps = {
++		.abi = GKD_UI_MENU_ABI,
++		.width = GKD_UI_MENU_WIDTH, .height = GKD_UI_MENU_HEIGHT,
++		.format = GKD_UI_MENU_RGB565, .pixel_bytes = GKD_UI_MENU_BYTES,
++		.min_ttl_ms = GKD_UI_MENU_MIN_TTL_MS,
++		.max_ttl_ms = GKD_UI_MENU_MAX_TTL_MS,
++		.max_transition_ms = GKD_UI_MENU_MAX_TRANSITION_MS,
++	};
++
++	return copy_to_user((void __user *)arg, &caps, sizeof(caps)) ? -EFAULT : 0;
++}
++
++static int gkd_ui_menu_submit_ioctl(struct x1830_fb *fb, unsigned long arg)
++{
++	struct gkd_ui_menu_submit submit;
++	struct pid *owner = task_tgid(current);
++	u16 *pixels;
++	unsigned rows;
++	bool renewing;
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	if (copy_from_user(&submit, (void __user *)arg, sizeof(submit)))
++		return -EFAULT;
++	if (!submit.pixels || upper_32_bits(submit.pixels) ||
++	    submit.pixel_bytes != GKD_UI_MENU_BYTES ||
++	    submit.ttl_ms < GKD_UI_MENU_MIN_TTL_MS ||
++	    submit.ttl_ms > GKD_UI_MENU_MAX_TTL_MS ||
++	    submit.transition_ms > GKD_UI_MENU_MAX_TRANSITION_MS ||
++	    !submit.sequence || submit.reserved[0] || submit.reserved[1])
++		return -EINVAL;
++	/* This CPU-only buffer need not be physically contiguous. Capture once
++	 * outside the compositor mutex; allocation/copy failure preserves UI. */
++	pixels = vmemdup_user(u64_to_user_ptr(submit.pixels), GKD_UI_MENU_BYTES);
++	if (IS_ERR(pixels))
++		return PTR_ERR(pixels);
++
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing) {
++		ret = -ENODEV;
++		goto out_unlock;
++	}
++	renewing = x1830_user_menu_live_locked(fb);
++	if (renewing && fb->user_menu_owner != owner) {
++		ret = -EBUSY;
++		goto out_unlock;
++	}
++	if (renewing && submit.sequence <= fb->user_menu_sequence) {
++		ret = -ESTALE;
++		goto out_unlock;
++	}
++	rows = renewing ? x1830_user_menu_rows_locked(fb) : 0;
++	/* Time may advance during the locked validation; rows() can reap it. */
++	if (!fb->user_menu_owner)
++		fb->user_menu_owner = get_pid(owner);
++	kvfree(fb->user_menu_virt);
++	fb->user_menu_virt = pixels;
++	pixels = NULL;
++	fb->user_menu_sequence = submit.sequence;
++	fb->user_menu_transition_ms = submit.transition_ms;
++	fb->user_menu_from_rows = rows;
++	fb->user_menu_animation_ms = (submit.transition_ms *
++		(GKD_UI_MENU_HEIGHT - rows) + GKD_UI_MENU_HEIGHT - 1U) /
++		GKD_UI_MENU_HEIGHT;
++	fb->user_menu_started = jiffies;
++	fb->user_menu_closing = false;
++	fb->user_menu_expires = jiffies + msecs_to_jiffies(submit.ttl_ms);
++	if (fb->composite_active)
++		mod_delayed_work(system_highpri_wq, &fb->composite_work, 0);
++	else
++		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++out_unlock:
++	mutex_unlock(&fb->volume_osd_lock);
++	kvfree(pixels);
++	return ret;
++}
++
++static int gkd_ui_menu_clear_ioctl(struct x1830_fb *fb)
++{
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing)
++		ret = -ENODEV;
++	else if (x1830_user_menu_live_locked(fb) &&
++		 fb->user_menu_owner != task_tgid(current))
++		ret = -EBUSY;
++	else {
++		x1830_user_menu_release_locked(fb);
++		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	}
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++
++static int gkd_ui_menu_hide_ioctl(struct x1830_fb *fb)
++{
++	unsigned rows, remaining;
++	unsigned long expires, now;
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing) {
++		ret = -ENODEV;
++		goto out;
++	}
++	if (x1830_user_menu_live_locked(fb)) {
++		if (fb->user_menu_owner != task_tgid(current)) {
++			ret = -EBUSY;
++			goto out;
++		}
++		if (!fb->user_menu_closing) {
++			rows = x1830_user_menu_rows_locked(fb);
++			now = jiffies;
++			if (!rows || !fb->user_menu_transition_ms ||
++			    !time_before(now, fb->user_menu_expires))
++				x1830_user_menu_release_locked(fb);
++			else {
++				fb->user_menu_from_rows = rows;
++				fb->user_menu_animation_ms =
++					(fb->user_menu_transition_ms * rows +
++					 GKD_UI_MENU_HEIGHT - 1U) / GKD_UI_MENU_HEIGHT;
++				/* The tick can advance after rows() sampled it. Fit the
++				 * whole close into the lease remaining at this one start. */
++				remaining = jiffies_to_msecs(fb->user_menu_expires - now);
++				if (fb->user_menu_animation_ms > remaining)
++					fb->user_menu_animation_ms = remaining;
++				fb->user_menu_started = now;
++				fb->user_menu_closing = true;
++				expires = now + msecs_to_jiffies(fb->user_menu_animation_ms);
++				if (time_before(expires, fb->user_menu_expires))
++					fb->user_menu_expires = expires;
++			}
++		}
++	}
++	x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++out:
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++
++static int x1830_fb_ioctl(struct fb_info *info, unsigned int cmd,
++			   unsigned long arg)
++{
++	struct x1830_fb *fb = info->par;
++
++	switch (cmd) {
++	case GKD_UI_MENU_GET_CAPS: return gkd_ui_menu_get_caps(arg);
++	case GKD_UI_MENU_SUBMIT: return gkd_ui_menu_submit_ioctl(fb, arg);
++	case GKD_UI_MENU_CLEAR: return gkd_ui_menu_clear_ioctl(fb);
++	case GKD_UI_MENU_HIDE: return gkd_ui_menu_hide_ioctl(fb);
++	case GKD_UI_PLANE_GET_CAPS: return gkd_ui_plane_get_caps(arg);
++	case GKD_UI_PLANE_SUBMIT: return gkd_ui_plane_submit_ioctl(fb, arg);
++	case GKD_UI_PLANE_CLEAR: return gkd_ui_plane_clear_ioctl(fb);
++	default: return -ENOTTY;
++	}
++}
++
+ static const struct fb_ops x1830_fb_ops = {
+ 	.owner		= THIS_MODULE,
+ 	.fb_read	= fb_sys_read,
+@@ -2530,6 +2975,7 @@
+ 	.fb_copyarea	= sys_copyarea,
+ 	.fb_imageblit	= sys_imageblit,
+ 	.fb_mmap	= x1830_fb_mmap,
++	.fb_ioctl	= x1830_fb_ioctl,
+ };
+ 
+ static const struct fb_var_screeninfo x1830_fb_var = {
+@@ -2719,11 +3165,16 @@
+ 	}
+ 	memset(fb->composite_virt, 0, X1830_COMPOSITE_SIZE);
+ 	fb->composite_source_addr = lower_32_bits(fb->fb_dma);
++	fb->user_plane_virt = kzalloc(GKD_UI_PLANE_BYTES, GFP_KERNEL);
++	if (!fb->user_plane_virt) {
++		ret = -ENOMEM;
++		goto err_free_composite;
++	}
+ 
+ 	fb->snapshot_virt = vzalloc(X1830_FB_FRAME_SIZE);
+ 	if (!fb->snapshot_virt) {
+ 		ret = -ENOMEM;
+-		goto err_free_composite;
++		goto err_free_user_plane;
+ 	}
+ 
+ 	fb->usb_debug_frozen_virt = vzalloc(X1830_FB_FRAME_SIZE);
+@@ -2806,6 +3257,7 @@
+ 		dev_err(dev, "failed to create gkd_resume_state: %d\n", ret);
+ 		goto err_remove_runtime_id;
+ 	}
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ 	ret = device_create_file(info->dev, &dev_attr_gkd_volume_osd);
+ 	if (ret) {
+ 		dev_err(dev, "failed to create gkd_volume_osd: %d\n", ret);
+@@ -2841,11 +3293,16 @@
+ 		dev_err(dev, "failed to create gkd_battery_label: %d\n", ret);
+ 		goto err_remove_power_osd;
+ 	}
++#endif
+ 	ret = sysfs_create_bin_file(&info->dev->kobj,
+ 				    &bin_attr_gkd_snapshot_rgb565);
+ 	if (ret) {
+ 		dev_err(dev, "failed to create gkd_snapshot_rgb565: %d\n", ret);
++#if IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
++		goto err_remove_resume_state;
++#else
+ 		goto err_remove_battery_label;
++#endif
+ 	}
+ 
+ 	if (WARN_ON(READ_ONCE(x1830_fb_syscore))) {
+@@ -2870,6 +3327,7 @@
+ err_remove_snapshot:
+ 	sysfs_remove_bin_file(&info->dev->kobj,
+ 			      &bin_attr_gkd_snapshot_rgb565);
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ err_remove_battery_label:
+ 	sysfs_remove_bin_file(&info->dev->kobj, &bin_attr_gkd_battery_label);
+ err_remove_power_osd:
+@@ -2884,6 +3342,7 @@
+ 	device_remove_file(info->dev, &dev_attr_gkd_brightness_osd);
+ err_remove_volume_osd:
+ 	device_remove_file(info->dev, &dev_attr_gkd_volume_osd);
++#endif
+ err_remove_resume_state:
+ 	device_remove_file(info->dev, &dev_attr_gkd_resume_state);
+ err_remove_runtime_id:
+@@ -2906,6 +3365,8 @@
+ 	vfree(fb->usb_debug_frozen_virt);
+ err_free_snapshot:
+ 	vfree(fb->snapshot_virt);
++err_free_user_plane:
++	kfree(fb->user_plane_virt);
+ err_free_composite:
+ 	dma_free_coherent(dev, X1830_COMPOSITE_SIZE, fb->composite_virt,
+ 			  fb->composite_dma);
+@@ -2931,22 +3392,30 @@
+ 	WRITE_ONCE(x1830_fb_syscore, NULL);
+ 	mutex_lock(&fb->volume_osd_lock);
+ 	fb->volume_osd_removing = true;
++	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
++		x1830_user_menu_release_locked(fb);
++		x1830_user_plane_release_locked(fb);
++	}
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	sysfs_remove_bin_file(&info->dev->kobj,
+ 			      &bin_attr_gkd_snapshot_rgb565);
+-	sysfs_remove_bin_file(&info->dev->kobj, &bin_attr_gkd_battery_label);
+ 	device_remove_file(info->dev, &dev_attr_gkd_resume_state);
+ 	device_remove_file(info->dev, &dev_attr_gkd_runtime_id);
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
++	sysfs_remove_bin_file(&info->dev->kobj, &bin_attr_gkd_battery_label);
+ 	device_remove_file(info->dev, &dev_attr_gkd_power_osd);
+ 	device_remove_file(info->dev, &dev_attr_gkd_network_status);
+ 	device_remove_file(info->dev, &dev_attr_gkd_usb_menu);
+ 	device_remove_file(info->dev, &dev_attr_gkd_notification);
+ 	device_remove_file(info->dev, &dev_attr_gkd_brightness_osd);
+ 	device_remove_file(info->dev, &dev_attr_gkd_volume_osd);
++#endif
+ 	cancel_delayed_work_sync(&fb->volume_osd_clear_work);
++#if !IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
+ 	mutex_lock(&fb->volume_osd_lock);
+ 	x1830_volume_osd_clear_locked(fb);
+ 	mutex_unlock(&fb->volume_osd_lock);
++#endif
+ 	unregister_framebuffer(info);
+ 	disable_irq(fb->irq);
+ 	cancel_delayed_work_sync(&fb->composite_work);
+@@ -2959,6 +3428,7 @@
+ 			  fb->descs_dma);
+ 	vfree(fb->usb_debug_frozen_virt);
+ 	vfree(fb->snapshot_virt);
++	kfree(fb->user_plane_virt);
+ 	dma_free_coherent(fb->dev, X1830_COMPOSITE_SIZE, fb->composite_virt,
+ 			  fb->composite_dma);
+ 	dma_free_coherent(fb->dev, X1830_MENU_SIZE, fb->menu_osd_virt, fb->menu_osd_dma);
+@@ -2984,6 +3454,7 @@
+ 	.remove = x1830_fb_remove,
+ 	.driver = {
+ 		.name = "x1830-dpu-fb",
++		.suppress_bind_attrs = true,
+ 		.of_match_table = x1830_fb_of_match,
+ 	},
+ };

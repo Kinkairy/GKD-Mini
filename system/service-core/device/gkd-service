@@ -1,0 +1,231 @@
+#!/bin/sh
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin
+REGISTRY=${GKD_SERVICE_REGISTRY:-/usr/share/gkd-mini/services.registry}
+SAFE_POINT=${GKD_SAFEPOINT_CMD:-/usr/libexec/gkd-mini/gkd-safe-point}
+RUN_DIR=${GKD_SERVICE_RUN_DIR:-/run/gkd-service}
+LOG=${GKD_SERVICE_LOG:-/var/log/gkd-service.log}
+CONFIG_CMD=${GKD_CONFIG_CMD:-/usr/sbin/gkd-config}
+ACTION_FREEZE=${GKD_ACTION_FREEZE:-/run/gkd-action-freeze/lease}
+MENU_LEASE=${GKD_MENU_LEASE:-/run/gkd-menu-owner/lease}
+COMPAT_DEFAULT=${GKD_CONFIG_COMPAT_DEFAULT:-/etc/gkd-mini/gdkmini.conf}
+COMPAT_OVERRIDE=${GKD_CONFIG_COMPAT_OVERRIDE:-/usr/local/etc/gkd-mini/gdkmini.conf}
+FREEZE_HELPER=${GKD_REFRESH_FREEZE_HELPER:-/usr/sbin/gkd-action-freeze}
+FREEZE_KIND=config-refresh
+refresh_owner=
+refresh_owner_start=
+refresh_requester_start=
+
+log_event()
+{
+	mkdir -p "${LOG%/*}" 2>/dev/null || true
+	printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null)" "$*" \
+		>>"$LOG" 2>/dev/null || true
+}
+
+registry_validate()
+{
+	awk -F '|' '
+	$0 !~ /^#/ && $0 != "" {
+		if (NF != 9 || seen[$1]++ || $5 !~ /^[0-9]+$/ || order[$5]++) bad=1
+		names[$1]=$5
+		deps[$1]=$4
+	}
+	END {
+		for (name in names) {
+			count=split(deps[name], list, ",")
+			for (i=1; i<=count && list[i]!=""; i++)
+				if (!(list[i] in names) || names[list[i]] >= names[name]) bad=1
+		}
+		exit bad
+	}' "$REGISTRY"
+}
+
+pid_alive()
+{
+	pidfile=$1 format=$2
+	[ "$format" = oneshot ] && return 0
+	[ -s "$pidfile" ] || return 1
+	case "$format" in
+		plain) pid=$(sed -n '1p' "$pidfile") ;;
+		pair) IFS=' ' read -r pid start <"$pidfile" || return 1 ;;
+		*) return 1 ;;
+	esac
+	case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+	kill -0 "$pid" 2>/dev/null || return 1
+	if [ "$format" = pair ]; then
+		case "$start" in ''|*[!0-9]*) return 1 ;; esac
+		[ "$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null)" = "$start" ] || return 1
+	fi
+}
+
+owner_changed()
+{
+	wanted=$1
+	grep -qx "$wanted" "$changed_owners"
+}
+
+row_selected()
+{
+	owners=$1
+	old_ifs=$IFS
+	IFS=,
+	for owner in $owners; do
+		owner_changed "$owner" && { IFS=$old_ifs; return 0; }
+	done
+	IFS=$old_ifs
+	return 1
+}
+
+run_refresh()
+{
+	row=$1 generation=$2
+	IFS='|' read -r name init owners depends order pidfile pidformat refresh safe <<EOF
+$row
+EOF
+	[ -x "$init" ] || return 2
+	case "$refresh" in restart|start) ;; *) return 2 ;; esac
+	log_event "service=$name refresh=$refresh generation=${generation##*/} begin"
+	GKD_CONFIG_EFFECTIVE="$generation/effective.conf" "$init" "$refresh" || return 1
+	pid_alive "$pidfile" "$pidformat" || return 1
+	log_event "service=$name refresh=$refresh generation=${generation##*/} healthy"
+}
+
+refresh_guard_release()
+{
+	if [ -n "$refresh_owner" ] && [ -n "$refresh_owner_start" ]; then
+		"$FREEZE_HELPER" release "$FREEZE_KIND" "$$" \
+			"$refresh_requester_start" "$refresh_owner" "$refresh_owner_start" \
+			>/dev/null 2>&1 || true
+	fi
+	rmdir "$RUN_DIR/refresh-lease" 2>/dev/null || true
+}
+
+refresh_guard_acquire()
+{
+	mkdir "$RUN_DIR/refresh-lease" 2>/dev/null || return 3
+	[ "$FREEZE_HELPER" != disabled ] || return 0
+	[ -x "$FREEZE_HELPER" ] || return 2
+	refresh_requester_start=$(awk '{print $22}' "/proc/$$/stat" 2>/dev/null) || return 1
+	case "$refresh_requester_start" in ''|*[!0-9]*) return 1 ;; esac
+	"$FREEZE_HELPER" acquire "$FREEZE_KIND" "$$" "$refresh_requester_start" || return 4
+	refresh_owner=$(sed -n 's/^owner=//p' "$ACTION_FREEZE")
+	refresh_owner_start=$(sed -n 's/^owner-start=//p' "$ACTION_FREEZE")
+	[ "$(sed -n 's/^kind=//p' "$ACTION_FREEZE")" = "$FREEZE_KIND" ] &&
+		[ "$(sed -n 's/^requester=//p' "$ACTION_FREEZE")" = "$$" ] || return 1
+	case "$refresh_owner:$refresh_owner_start" in *[!0-9:]*|:*|*:) return 1 ;; esac
+}
+
+publish_compatibility_config()
+{
+	source=$1
+	[ -r "$source" ] || return 1
+	for destination in "$COMPAT_DEFAULT" "$COMPAT_OVERRIDE"; do
+		mkdir -p "${destination%/*}" || return 1
+		[ ! -L "$destination" ] || return 1
+		temporary=${destination%/*}/.gkd-effective.$$
+		cp "$source" "$temporary" || return 1
+		chmod 0644 "$temporary" || return 1
+		mv -f "$temporary" "$destination" || return 1
+	done
+}
+
+rollback_rows()
+{
+	applied=$1 old_generation=$2
+	[ -r "$old_generation/effective.conf" ] || return 0
+	awk '{ lines[NR]=$0 } END { for (i=NR; i>0; --i) print lines[i] }' "$applied" |
+	while IFS= read -r row; do
+		run_refresh "$row" "$old_generation" ||
+			log_event "rollback=failed service=${row%%|*}"
+	done
+}
+
+apply_config()
+{
+	old_generation=$1 new_generation=$2 commit_generation=${3:-}
+	[ -r "$new_generation/effective.conf" ] &&
+		[ -r "$new_generation/changes.tsv" ] || return 2
+	[ ! -r "$old_generation/effective.conf" ] ||
+		! cmp -s "$old_generation/effective.conf" "$new_generation/effective.conf" || {
+			printf 'GKD_SERVICE_CONFIG_UNCHANGED\n'
+			return 0
+		}
+	[ ! -s "$ACTION_FREEZE" ] && [ ! -s "$MENU_LEASE" ] || return 4
+	registry_validate || return 2
+	mkdir -p "$RUN_DIR" || return 1
+	refresh_guard_acquire || { result=$?; refresh_guard_release; return "$result"; }
+	plan=$RUN_DIR/.plan.$$
+	applied=$RUN_DIR/.applied.$$
+	changed_owners=$RUN_DIR/.owners.$$
+	trap 'rm -f "$plan" "$applied" "$changed_owners"; refresh_guard_release' EXIT INT TERM
+	cut -f2 "$new_generation/changes.tsv" | sort -u >"$changed_owners"
+	: >"$plan"
+	: >"$applied"
+	sort -t '|' -k5,5n "$REGISTRY" |
+	while IFS= read -r row; do
+		case "$row" in ''|'#'*) continue ;; esac
+		owners=$(printf '%s\n' "$row" | cut -d '|' -f3)
+		row_selected "$owners" && printf '%s\n' "$row"
+	done >"$plan"
+	while IFS='	' read -r key owner policy; do
+		[ "$policy" != next-entry ] ||
+			printf 'GKD_SERVICE_DEFERRED owner=%s key=%s policy=next-entry\n' "$owner" "$key"
+	done <"$new_generation/changes.tsv"
+	while IFS= read -r row; do
+		IFS='|' read -r name init owners depends order pidfile pidformat refresh safe <<EOF
+$row
+EOF
+		if ! GKD_SAFEPOINT_OWN_REQUESTER=$$ "$SAFE_POINT" "$safe"; then
+			log_event "config_refresh=deferred service=$name safe_point=$safe"
+			return 4
+		fi
+	done <"$plan"
+	if ! publish_compatibility_config "$new_generation/effective.conf"; then
+		log_event "config_refresh=failed compatibility_snapshot=new"
+		publish_compatibility_config "$old_generation/effective.conf" || true
+		return 1
+	fi
+	while IFS= read -r row; do
+		printf '%s\n' "$row" >>"$applied"
+		if ! run_refresh "$row" "$new_generation"; then
+			log_event "config_refresh=failed service=${row%%|*}"
+			rollback_rows "$applied" "$old_generation"
+			publish_compatibility_config "$old_generation/effective.conf" || true
+			return 1
+		fi
+	done <"$plan"
+	if [ -n "$commit_generation" ] &&
+	   ! "$CONFIG_CMD" commit "$commit_generation"; then
+		log_event "config_refresh=failed commit=$commit_generation"
+		rollback_rows "$applied" "$old_generation"
+		publish_compatibility_config "$old_generation/effective.conf" || true
+		return 1
+	fi
+	log_event "config_refresh=prepared generation=${new_generation##*/}"
+	printf 'GKD_SERVICE_CONFIG_PREPARED generation=%s services=%s\n' \
+		"${new_generation##*/}" "$(wc -l <"$plan" | tr -d ' ')"
+}
+
+status_all()
+{
+	result=0
+	sort -t '|' -k5,5n "$REGISTRY" |
+	while IFS='|' read -r name init owners depends order pidfile pidformat refresh safe; do
+		case "$name" in ''|'#'*) continue ;; esac
+		if [ -x "$init" ] && pid_alive "$pidfile" "$pidformat"; then
+			printf '%s=running\n' "$name"
+		else
+			printf '%s=stopped\n' "$name"
+			result=1
+		fi
+	done
+	return "$result"
+}
+
+case "${1:-status}" in
+	validate-registry) registry_validate ;;
+	status) registry_validate && status_all ;;
+	apply-config) [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || exit 2; apply_config "$2" "$3" "${4:-}" ;;
+	*) echo 'usage: gkd-service {validate-registry|status|apply-config OLD_GENERATION NEW_GENERATION}' >&2; exit 2 ;;
+esac

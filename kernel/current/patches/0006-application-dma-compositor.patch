@@ -1,0 +1,729 @@
+--- a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
++++ b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+@@ -38,6 +38,7 @@
+ #include <linux/syscore_ops.h>
+ #include <linux/vmalloc.h>
+ #include <linux/workqueue.h>
++#include "gkd-x1830-dma.h"
+ 
+ #define X1830_FB_XRES			320U
+ #define X1830_FB_YRES			240U
+@@ -195,6 +196,7 @@
+ 	dma_addr_t volume_osd_dma;
+ 	u32 *menu_osd_virt;
+ 	dma_addr_t menu_osd_dma;
++	struct x1830_dma_compositor dma;
+ 	void *composite_virt;
+ 	dma_addr_t composite_dma;
+ 	void *snapshot_virt;
+@@ -690,69 +692,79 @@
+ 		}
+ }
+ 
++static void x1830_user_plane_copy_tile(u16 *target, const u16 *source)
++{
++	unsigned int row;
++
++	for (row = 0; row < GKD_UI_PLANE_HEIGHT; row++) {
++		unsigned int offset = (GKD_UI_PLANE_Y + row) * X1830_FB_XRES +
++				      GKD_UI_PLANE_X;
++
++		memcpy(target + offset, source + offset,
++		       GKD_UI_PLANE_WIDTH * sizeof(*target));
++	}
++}
++
+ /*
+  * Keep userspace's two RGB565 pages untouched.  Copy the selected page into
+  * an isolated coherent scanout, blend the System UI there, and let hardware
+  * scan only that one RGB565 layer.  This is deterministic on the GKD X1830
+  * where the second DPU layer is fetched but is not present at the TFT output.
+  */
+-static u32 x1830_software_composite_locked(struct x1830_fb *fb,
+-					    u32 source_addr)
++static int x1830_software_composite_locked(struct x1830_fb *fb,
++					 u32 source_addr, u32 *output_addr)
+ {
+ 	u32 fb_addr = lower_32_bits(fb->fb_dma);
+-	u32 offset;
+-	u16 *source;
+ 	u16 *target;
+-	u32 *overlay = fb->menu_osd_virt;
+ 	u8 next = fb->composite_front ^ 1U;
+-	unsigned menu_rows = IS_ENABLED(CONFIG_FB_X1830_USER_PLANE) ?
+-		x1830_user_menu_rows_locked(fb) : 0;
+-
+-	if (menu_rows == GKD_UI_MENU_HEIGHT) {
+-		source = fb->user_menu_virt;
+-	} else if (fb->usb_debug_frozen_valid) {
+-		source = fb->usb_debug_frozen_virt;
+-	} else {
+-		if (WARN_ON_ONCE(source_addr < fb_addr ||
+-				 source_addr - fb_addr >
+-				 X1830_FB_SIZE - X1830_FB_FRAME_SIZE))
+-			return source_addr;
+-		offset = source_addr - fb_addr;
+-		source = (u16 *)((u8 *)fb->fb_virt + offset);
+-	}
+-	target = (u16 *)((u8 *)fb->composite_virt +
+-			 next * X1830_FB_FRAME_SIZE);
+-	memcpy(target, source, X1830_FB_FRAME_SIZE);
+-	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
+-		if (menu_rows && menu_rows < GKD_UI_MENU_HEIGHT)
+-			memcpy(target, fb->user_menu_virt +
+-			       (GKD_UI_MENU_HEIGHT - menu_rows) * GKD_UI_MENU_WIDTH,
+-			       menu_rows * GKD_UI_MENU_WIDTH * sizeof(*target));
+-		x1830_user_plane_blend_locked(fb, target);
+-	} else {
+-		if (time_before(jiffies, fb->volume_osd_expires))
+-			x1830_blend_rect(target, overlay, X1830_VOLUME_OSD_X,
+-					 X1830_VOLUME_OSD_Y, X1830_VOLUME_OSD_WIDTH,
+-					 X1830_VOLUME_OSD_HEIGHT);
+-		if (time_before(jiffies, fb->menu_expires)) {
+-			if (fb->menu_view == X1830_MENU_EJECT_CONFIRM)
+-				x1830_blend_rect(target, overlay, 92, 101, 136, 38);
+-			else if (fb->menu_view == X1830_MENU_CHARGE ||
+-				 fb->menu_view == X1830_MENU_STORAGE_DISABLED)
+-				x1830_blend_rect(target, overlay, 8, 206, 94, 22);
+-			else if (fb->menu_view == X1830_MENU_STORAGE ||
+-				 fb->menu_view == X1830_MENU_DEBUG)
+-				x1830_blend_rect(target, overlay, 8, 206, 109, 22);
+-			else if (fb->menu_view != X1830_MENU_HIDDEN)
+-				x1830_blend_rect(target, overlay, 66, 62, 188, 116);
+-		}
+-		if (time_before(jiffies, fb->power_osd_expires))
+-			x1830_blend_rect(target, overlay, 218, 206, 94, 22);
+-	}
+-	dma_wmb();
++	unsigned menu_rows = x1830_user_menu_rows_locked(fb);
++	int ret;
++
++	if (!menu_rows && !fb->usb_debug_frozen_valid) {
++		if (source_addr < fb_addr ||
++		    source_addr - fb_addr > X1830_FB_SIZE - X1830_FB_FRAME_SIZE)
++			return -EINVAL;
++		ret = x1830_dma_copy_output(&fb->dma, source_addr - fb_addr,
++					   next * X1830_FB_FRAME_SIZE);
++		if (ret)
++			return ret;
++		target = (u16 *)fb->composite_virt + next * (X1830_FB_FRAME_SIZE / sizeof(*target));
++		x1830_dma_stage_cpu(&fb->dma);
++		/* Use this completed frame's background, never the live source.
++		 * Coherent CPU accesses touch only OSD rows; stage stays CPU-owned. */
++		x1830_user_plane_copy_tile(fb->dma.stage, target);
++		x1830_user_plane_blend_locked(fb, fb->dma.stage);
++		x1830_user_plane_copy_tile(target, fb->dma.stage);
++		dma_wmb();
++		*output_addr = lower_32_bits(fb->composite_dma +
++					    next * X1830_FB_FRAME_SIZE);
++		fb->composite_front = next;
++		return 0;
++	}
++
++	if (menu_rows == GKD_UI_MENU_HEIGHT)
++		ret = x1830_dma_prepare_cached(&fb->dma, fb->user_menu_virt);
++	else if (fb->usb_debug_frozen_valid)
++		ret = x1830_dma_prepare_cached(&fb->dma, fb->usb_debug_frozen_virt);
++	else {
++		if (source_addr < fb_addr ||
++		    source_addr - fb_addr > X1830_FB_SIZE - X1830_FB_FRAME_SIZE)
++			return -EINVAL;
++		ret = x1830_dma_prepare(&fb->dma, source_addr - fb_addr);
++	}
++	if (ret)
++		return ret;
++	target = fb->dma.stage;
++	if (menu_rows && menu_rows < GKD_UI_MENU_HEIGHT)
++		memcpy(target, fb->user_menu_virt +
++		       (GKD_UI_MENU_HEIGHT - menu_rows) * GKD_UI_MENU_WIDTH,
++		       menu_rows * GKD_UI_MENU_WIDTH * sizeof(*target));
++	x1830_user_plane_blend_locked(fb, target);
++	ret = x1830_dma_finish(&fb->dma, next * X1830_FB_FRAME_SIZE, output_addr);
++	if (ret)
++		return ret;
+ 	fb->composite_front = next;
+-	return lower_32_bits(fb->composite_dma +
+-			      next * X1830_FB_FRAME_SIZE);
++	return 0;
+ }
+ 
+ static bool x1830_overlay_active_locked(struct x1830_fb *fb)
+@@ -776,7 +788,7 @@
+  * and point the single hardware layer at the isolated scanout.  The composer
+  * is only started if it stopped; the TFT and clocks stay running.
+  */
+-static void x1830_hardware_osd_reassert_locked(struct x1830_fb *fb,
++static int x1830_hardware_osd_reassert_locked(struct x1830_fb *fb,
+ 						u32 scanout_addr)
+ {
+ 	struct x1830_frame_desc *frame = &fb->descs->frame;
+@@ -789,10 +801,20 @@
+ 		offsetof(struct x1830_desc_block, layer[0]));
+ 	bool overlay_active = x1830_overlay_active_locked(fb);
+ 	u32 output_addr = scanout_addr;
+-
++	int ret;
++
++	if (fb->dma.paused)
++		return -EAGAIN;
+ 	fb->composite_source_addr = scanout_addr;
+-	if (overlay_active)
+-		output_addr = x1830_software_composite_locked(fb, scanout_addr);
++	if (overlay_active) {
++		ret = x1830_software_composite_locked(fb, scanout_addr, &output_addr);
++		if (ret) {
++			/* Keep the last complete frame; only reap leases while faulted. */
++			mod_delayed_work(system_highpri_wq, &fb->composite_work,
++				msecs_to_jiffies(X1830_DMA_FAULT_RECHECK_MS));
++			return ret;
++		}
++	}
+ 	fb->composite_active = overlay_active;
+ 
+ 	WRITE_ONCE(layer->size, X1830_FRAME_SIZE);
+@@ -835,6 +857,7 @@
+ 	if (overlay_active)
+ 		mod_delayed_work(system_highpri_wq, &fb->composite_work,
+ 				 msecs_to_jiffies(X1830_COMPOSITE_REFRESH_MS));
++	return 0;
+ }
+ 
+ /*
+@@ -852,9 +875,10 @@
+ 	struct x1830_fb *fb = container_of(to_delayed_work(work),
+ 					  struct x1830_fb, composite_work);
+ 	u32 output_addr;
++	int ret;
+ 
+ 	mutex_lock(&fb->volume_osd_lock);
+-	if (fb->volume_osd_removing)
++	if (fb->volume_osd_removing || fb->dma.paused)
+ 		goto out_unlock;
+ 	if (fb->user_debug_freeze_owner)
+ 		x1830_user_debug_freeze_live_locked(fb);
+@@ -865,8 +889,13 @@
+ 		dma_wmb();
+ 		goto out_unlock;
+ 	}
+-	output_addr = x1830_software_composite_locked(fb,
+-						      fb->composite_source_addr);
++	ret = x1830_software_composite_locked(fb, fb->composite_source_addr,
++					     &output_addr);
++	if (ret) {
++		queue_delayed_work(system_highpri_wq, &fb->composite_work,
++			msecs_to_jiffies(X1830_DMA_FAULT_RECHECK_MS));
++		goto out_unlock;
++	}
+ 	WRITE_ONCE(fb->descs->layer[0].buffer_addr, output_addr);
+ 	fb->composite_active = true;
+ 	dma_wmb();
+@@ -2676,6 +2705,7 @@
+ {
+ 	struct x1830_fb *fb = info->par;
+ 	dma_addr_t scanout;
++	int ret;
+ 
+ 	if (var->xoffset ||
+ 	    (var->yoffset != 0 && var->yoffset != X1830_FB_YRES))
+@@ -2696,9 +2726,9 @@
+ 		return 0;
+ 	}
+ 	fb->latest_scanout_addr = lower_32_bits(scanout);
+-	x1830_hardware_osd_reassert_locked(fb, lower_32_bits(scanout));
++	ret = x1830_hardware_osd_reassert_locked(fb, lower_32_bits(scanout));
+ 	mutex_unlock(&fb->volume_osd_lock);
+-	return 0;
++	return ret;
+ }
+ 
+ static int x1830_fb_blank(int blank_mode, struct fb_info *info)
+@@ -2776,6 +2806,9 @@
+ 		ret = -ENODEV;
+ 		goto out_unlock;
+ 	}
++	ret = x1830_dma_ready(&fb->dma);
++	if (ret)
++		goto out_unlock;
+ 	renewing = x1830_user_plane_live_locked(fb);
+ 	if (renewing && fb->user_plane_owner != owner) {
+ 		ret = -EBUSY;
+@@ -2801,7 +2834,7 @@
+ 	if (fb->composite_active)
+ 		mod_delayed_work(system_highpri_wq, &fb->composite_work, 0);
+ 	else
+-		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++		ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ out_unlock:
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	kfree(pixels);
+@@ -2822,7 +2855,7 @@
+ 		ret = -EBUSY;
+ 	else {
+ 		x1830_user_plane_release_locked(fb);
+-		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++		ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ 	}
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	return ret;
+@@ -2873,6 +2906,9 @@
+ 		ret = -ENODEV;
+ 		goto out_unlock;
+ 	}
++	ret = x1830_dma_ready(&fb->dma);
++	if (ret)
++		goto out_unlock;
+ 	renewing = x1830_user_menu_live_locked(fb);
+ 	if (renewing && fb->user_menu_owner != owner) {
+ 		ret = -EBUSY;
+@@ -2901,7 +2937,7 @@
+ 	if (fb->composite_active)
+ 		mod_delayed_work(system_highpri_wq, &fb->composite_work, 0);
+ 	else
+-		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++		ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ out_unlock:
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	kvfree(pixels);
+@@ -2922,7 +2958,7 @@
+ 		ret = -EBUSY;
+ 	else {
+ 		x1830_user_menu_release_locked(fb);
+-		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++		ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ 	}
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	return ret;
+@@ -2970,7 +3006,7 @@
+ 			}
+ 		}
+ 	}
+-	x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ out:
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	return ret;
+@@ -2997,6 +3033,9 @@
+ 		ret = -ENODEV;
+ 		goto out_unlock;
+ 	}
++	ret = x1830_dma_ready(&fb->dma);
++	if (ret)
++		goto out_unlock;
+ 	renewing = x1830_user_debug_freeze_live_locked(fb);
+ 	if (renewing && fb->user_debug_freeze_owner != owner) {
+ 		ret = -EBUSY;
+@@ -3015,7 +3054,7 @@
+ 	fb->user_debug_freeze_sequence = submit.sequence;
+ 	fb->user_debug_freeze_expires = jiffies +
+ 		msecs_to_jiffies(submit.ttl_ms);
+-	x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ out_unlock:
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	return ret;
+@@ -3035,7 +3074,7 @@
+ 		ret = -EBUSY;
+ 	} else {
+ 		x1830_user_debug_freeze_release_locked(fb);
+-		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++		ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
+ 	}
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	return ret;
+@@ -3266,6 +3305,11 @@
+ 	}
+ 	memset(fb->composite_virt, 0, X1830_COMPOSITE_SIZE);
+ 	fb->composite_source_addr = lower_32_bits(fb->fb_dma);
++	ret = x1830_dma_init(&fb->dma, dev, fb->fb_virt, fb->fb_dma,
++		X1830_FB_SIZE, fb->composite_virt, fb->composite_dma,
++		X1830_COMPOSITE_SIZE, X1830_FB_FRAME_SIZE);
++	if (ret)
++		goto err_free_composite;
+ 	fb->user_plane_virt = kzalloc(GKD_UI_PLANE_BYTES, GFP_KERNEL);
+ 	if (!fb->user_plane_virt) {
+ 		ret = -ENOMEM;
+@@ -3469,6 +3513,7 @@
+ err_free_user_plane:
+ 	kfree(fb->user_plane_virt);
+ err_free_composite:
++	x1830_dma_release(&fb->dma);
+ 	dma_free_coherent(dev, X1830_COMPOSITE_SIZE, fb->composite_virt,
+ 			  fb->composite_dma);
+ err_free_menu:
+@@ -3493,6 +3538,7 @@
+ 	WRITE_ONCE(x1830_fb_syscore, NULL);
+ 	mutex_lock(&fb->volume_osd_lock);
+ 	fb->volume_osd_removing = true;
++	fb->dma.paused = true;
+ 	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
+ 		x1830_user_menu_release_locked(fb);
+ 		x1830_user_plane_release_locked(fb);
+@@ -3526,6 +3572,7 @@
+ 		dev_warn(fb->dev, "timed out stopping DPU\n");
+ 	clk_disable_unprepare(fb->clk);
+ 	clk_disable_unprepare(fb->ahb_clk);
++	x1830_dma_release(&fb->dma);
+ 	dma_free_coherent(fb->dev, sizeof(*fb->descs), fb->descs,
+ 			  fb->descs_dma);
+ 	vfree(fb->usb_debug_frozen_virt);
+@@ -3542,7 +3589,42 @@
+ 	return 0;
+ }
+ 
+-/* The DPU stays active at the ordinary device PM boundary, as in jz_fb_v14. */
++/* Drain PDMA in process context; the established DPU syscore sequence stays. */
++static int x1830_fb_dma_suspend(struct device *dev)
++{
++	struct fb_info *info = dev_get_drvdata(dev);
++	struct x1830_fb *fb = info->par;
++
++	mutex_lock(&fb->volume_osd_lock);
++	fb->dma.paused = true;
++	mutex_unlock(&fb->volume_osd_lock);
++	cancel_delayed_work_sync(&fb->composite_work);
++	mutex_lock(&fb->volume_osd_lock);
++	dmaengine_terminate_sync(fb->dma.channel);
++	mutex_unlock(&fb->volume_osd_lock);
++	return 0;
++}
++static int x1830_fb_dma_resume(struct device *dev)
++{
++	struct fb_info *info = dev_get_drvdata(dev);
++	struct x1830_fb *fb = info->par;
++	int ret;
++
++	mutex_lock(&fb->volume_osd_lock);
++	fb->dma.fault = 0;
++	fb->dma.paused = false;
++	ret = x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++static const struct dev_pm_ops x1830_fb_dma_pm_ops = {
++	.suspend = x1830_fb_dma_suspend,
++	.resume = x1830_fb_dma_resume,
++	.freeze = x1830_fb_dma_suspend,
++	.thaw = x1830_fb_dma_resume,
++	.poweroff = x1830_fb_dma_suspend,
++	.restore = x1830_fb_dma_resume,
++};
+ 
+ static const struct of_device_id x1830_fb_of_match[] = {
+ 	{ .compatible = "gamekiddy,gkd350-x1830-dpu-fb" },
+@@ -3558,6 +3640,7 @@
+ 		.name = "x1830-dpu-fb",
+ 		.suppress_bind_attrs = true,
+ 		.of_match_table = x1830_fb_of_match,
++		.pm = &x1830_fb_dma_pm_ops,
+ 	},
+ };
+ module_platform_driver(x1830_fb_driver);
+--- /dev/null
++++ b/drivers/video/fbdev/gkd-x1830-dma.h
+@@ -0,0 +1,306 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++/* Serialized A-profile composition transport; callers hold the UI mutex. */
++#ifndef GKD_X1830_DMA_H
++#define GKD_X1830_DMA_H
++#include <linux/completion.h>
++#include <linux/dmaengine.h>
++#include <linux/dma-map-ops.h>
++#include <linux/scatterlist.h>
++#include <linux/of.h>
++
++#define X1830_DMA_TIMEOUT_MS 20U
++#define X1830_DMA_FAULT_RECHECK_MS 100U
++
++struct x1830_dma_mapping {
++	struct sg_table sgt;
++	dma_addr_t address, native;
++	size_t bytes;
++	enum dma_data_direction direction;
++	bool table, mapped;
++};
++struct x1830_dma_compositor {
++	struct device *dev, *copy_dev;
++	struct dma_chan *channel;
++	struct device_link *link;
++	struct x1830_dma_mapping source, output;
++	struct completion done;
++	void *stage;
++	dma_addr_t stage_dma;
++	size_t frame_bytes, stage_bytes;
++	bool stage_cpu, paused;
++	int fault;
++};
++static bool x1830_dma_provider(struct dma_chan *channel, void *node)
++{
++	return channel->device->dev->of_node == node;
++}
++static void x1830_dma_completed(void *data)
++{
++	struct x1830_dma_compositor *copy = data;
++
++	complete(&copy->done);
++}
++static bool x1830_dma_range32(dma_addr_t address, size_t bytes)
++{
++	return bytes && !upper_32_bits((u64)address + bytes - 1U);
++}
++static void x1830_dma_stage_cpu(struct x1830_dma_compositor *copy)
++{
++	if (!copy->stage_cpu) {
++		dma_sync_single_for_cpu(copy->copy_dev, copy->stage_dma,
++					copy->stage_bytes, DMA_BIDIRECTIONAL);
++		copy->stage_cpu = true;
++	}
++}
++static void x1830_dma_stage_device(struct x1830_dma_compositor *copy)
++{
++	if (copy->stage_cpu) {
++		dma_sync_single_for_device(copy->copy_dev, copy->stage_dma,
++					   copy->stage_bytes, DMA_BIDIRECTIONAL);
++		copy->stage_cpu = false;
++	}
++}
++static int x1830_dma_map(struct x1830_dma_compositor *copy,
++			struct x1830_dma_mapping *map, void *cpu,
++			dma_addr_t native, size_t bytes,
++			enum dma_data_direction direction)
++{
++	int ret;
++
++	map->native = native;
++	map->bytes = bytes;
++	map->direction = direction;
++	ret = dma_get_sgtable(copy->dev, &map->sgt, cpu, native, bytes);
++	if (ret)
++		return ret;
++	map->table = true;
++	/* The DPU allocation is uncached coherent memory on this board.
++	 * As in DRM PRIME/VB2, never flush a different cached alias. */
++	ret = dma_map_sgtable(copy->copy_dev, &map->sgt, direction,
++			     DMA_ATTR_SKIP_CPU_SYNC);
++	if (ret)
++		return ret;
++	map->mapped = true;
++	if (map->sgt.nents != 1 || sg_dma_len(map->sgt.sgl) < bytes)
++		return -ERANGE;
++	map->address = sg_dma_address(map->sgt.sgl);
++	if (!x1830_dma_range32(map->address, bytes) ||
++	    !x1830_dma_range32(native, bytes))
++		return -EOVERFLOW;
++	return 0;
++}
++static void x1830_dma_unmap(struct x1830_dma_compositor *copy,
++			  struct x1830_dma_mapping *map)
++{
++	if (map->mapped)
++		dma_unmap_sgtable(copy->copy_dev, &map->sgt, map->direction,
++				 DMA_ATTR_SKIP_CPU_SYNC);
++	if (map->table)
++		sg_free_table(&map->sgt);
++	map->mapped = false;
++	map->table = false;
++}
++static void x1830_dma_release(struct x1830_dma_compositor *copy)
++{
++	copy->paused = true;
++	if (copy->channel)
++		dmaengine_terminate_sync(copy->channel);
++	if (copy->stage) {
++		x1830_dma_stage_cpu(copy);
++		dma_free_noncoherent(copy->copy_dev, copy->stage_bytes,
++				     copy->stage, copy->stage_dma,
++				     DMA_BIDIRECTIONAL);
++		copy->stage = NULL;
++	}
++	x1830_dma_unmap(copy, &copy->output);
++	x1830_dma_unmap(copy, &copy->source);
++	if (copy->link) {
++		device_link_del(copy->link);
++		copy->link = NULL;
++	}
++	if (copy->channel) {
++		dma_release_channel(copy->channel);
++		copy->channel = NULL;
++	}
++}
++static int x1830_dma_init(struct x1830_dma_compositor *copy,
++			 struct device *dev, void *source, dma_addr_t source_dma,
++			 size_t source_bytes, void *output, dma_addr_t output_dma,
++			 size_t output_bytes, size_t frame_bytes)
++{
++	struct device_node *node;
++	dma_cap_mask_t mask;
++	int ret;
++
++	copy->dev = dev;
++	copy->frame_bytes = frame_bytes;
++	copy->stage_bytes = PAGE_ALIGN(frame_bytes);
++	init_completion(&copy->done);
++	if (!IS_ENABLED(CONFIG_MIPS) || !IS_ENABLED(CONFIG_DMA_NONCOHERENT) ||
++	    IS_ENABLED(CONFIG_IOMMU_SUPPORT) || IS_ENABLED(CONFIG_SWIOTLB))
++		return -EOPNOTSUPP;
++	node = of_find_compatible_node(NULL, NULL, "ingenic,x1830-dma");
++	if (!node)
++		return -ENODEV;
++	dma_cap_zero(mask);
++	dma_cap_set(DMA_MEMCPY, mask);
++	copy->channel = __dma_request_channel(&mask, x1830_dma_provider, node, node);
++	of_node_put(node);
++	if (!copy->channel)
++		return -EPROBE_DEFER;
++	copy->copy_dev = dmaengine_get_dma_device(copy->channel);
++	if (get_dma_ops(dev) || get_dma_ops(copy->copy_dev) ||
++	    dev->dma_mem || copy->copy_dev->dma_mem) {
++		ret = -EOPNOTSUPP;
++		goto fail;
++	}
++	copy->link = device_link_add(dev, copy->copy_dev, DL_FLAG_STATELESS);
++	if (!copy->link) {
++		ret = -EINVAL;
++		goto fail;
++	}
++	ret = x1830_dma_map(copy, &copy->source, source, source_dma,
++			   source_bytes, DMA_TO_DEVICE);
++	if (ret)
++		goto fail;
++	ret = x1830_dma_map(copy, &copy->output, output, output_dma,
++			   output_bytes, DMA_FROM_DEVICE);
++	if (ret)
++		goto fail;
++	copy->stage = dma_alloc_noncoherent(copy->copy_dev, copy->stage_bytes,
++					    &copy->stage_dma, DMA_BIDIRECTIONAL,
++					    GFP_KERNEL);
++	if (!copy->stage) {
++		ret = -ENOMEM;
++		goto fail;
++	}
++	/* dma_direct_alloc_pages zeroes through the cached CPU mapping. */
++	copy->stage_cpu = true;
++	if (!x1830_dma_range32(copy->stage_dma, copy->stage_bytes)) {
++		ret = -EOVERFLOW;
++		goto fail;
++	}
++	return 0;
++fail:
++	x1830_dma_release(copy);
++	return ret;
++}
++static int x1830_dma_ready(struct x1830_dma_compositor *copy)
++{
++	if (copy->paused)
++		return -EAGAIN;
++	return copy->fault;
++}
++static int x1830_dma_transfer(struct x1830_dma_compositor *copy,
++			      dma_addr_t target, dma_addr_t source)
++{
++	struct dma_async_tx_descriptor *tx;
++	dma_cookie_t cookie;
++	enum dma_status status;
++	unsigned long done;
++	int ret = x1830_dma_ready(copy);
++
++	if (ret)
++		return ret;
++	reinit_completion(&copy->done);
++	dma_wmb();
++	tx = dmaengine_prep_dma_memcpy(copy->channel, target, source,
++				      copy->frame_bytes,
++				      DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
++	if (!tx) {
++		ret = -ENOMEM;
++		goto fail;
++	}
++	tx->callback = x1830_dma_completed;
++	tx->callback_param = copy;
++	cookie = dmaengine_submit(tx);
++	ret = dma_submit_error(cookie);
++	if (ret)
++		goto fail;
++	dma_async_issue_pending(copy->channel);
++	done = wait_for_completion_timeout(&copy->done,
++					   msecs_to_jiffies(X1830_DMA_TIMEOUT_MS));
++	status = done ? dmaengine_tx_status(copy->channel, cookie, NULL) : DMA_ERROR;
++	if (!done) {
++		ret = -ETIMEDOUT;
++		goto fail;
++	}
++	if (status != DMA_COMPLETE) {
++		ret = -EIO;
++		goto fail;
++	}
++	/* Drain callback before returning, reusing completion, or freeing storage. */
++	dmaengine_terminate_sync(copy->channel);
++	dma_rmb();
++	return 0;
++fail:
++	dmaengine_terminate_sync(copy->channel);
++	copy->fault = ret;
++	dev_err(copy->dev, "OSD DMA stopped: %d\n", ret);
++	return ret;
++}
++static int x1830_dma_copy_output(struct x1830_dma_compositor *copy,
++				 size_t source_offset, size_t output_offset)
++{
++	int ret = x1830_dma_ready(copy);
++
++	if (ret)
++		return ret;
++	if (copy->source.bytes < copy->frame_bytes ||
++	    source_offset > copy->source.bytes - copy->frame_bytes ||
++	    copy->output.bytes < copy->frame_bytes ||
++	    output_offset > copy->output.bytes - copy->frame_bytes)
++		return -EINVAL;
++	/* Copy to the inactive coherent output; completion drains and read
++	 * barrier precede the caller's CPU tile access. No address published. */
++	return x1830_dma_transfer(copy, copy->output.address + output_offset,
++				  copy->source.address + source_offset);
++}
++static int x1830_dma_prepare(struct x1830_dma_compositor *copy, size_t offset)
++{
++	int ret = x1830_dma_ready(copy);
++
++	if (ret)
++		return ret;
++	if (copy->source.bytes < copy->frame_bytes ||
++	    offset > copy->source.bytes - copy->frame_bytes)
++		return -EINVAL;
++	x1830_dma_stage_device(copy);
++	ret = x1830_dma_transfer(copy, copy->stage_dma, copy->source.address + offset);
++	if (ret)
++		return ret;
++	x1830_dma_stage_cpu(copy);
++	return 0;
++}
++static int x1830_dma_prepare_cached(struct x1830_dma_compositor *copy,
++				    const void *source)
++{
++	int ret = x1830_dma_ready(copy);
++
++	if (ret)
++		return ret;
++	x1830_dma_stage_cpu(copy);
++	/* Menu/frozen sources already live in CPU cacheable memory. */
++	memcpy(copy->stage, source, copy->frame_bytes);
++	return 0;
++}
++static int x1830_dma_finish(struct x1830_dma_compositor *copy, size_t offset,
++			   u32 *output)
++{
++	int ret = x1830_dma_ready(copy);
++
++	if (ret)
++		return ret;
++	if (copy->output.bytes < copy->frame_bytes ||
++	    offset > copy->output.bytes - copy->frame_bytes)
++		return -EINVAL;
++	x1830_dma_stage_device(copy);
++	ret = x1830_dma_transfer(copy, copy->output.address + offset, copy->stage_dma);
++	if (ret)
++		return ret;
++	x1830_dma_stage_cpu(copy);
++	dma_wmb();
++	*output = lower_32_bits(copy->output.native + offset);
++	return 0;
++}
++#endif

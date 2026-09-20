@@ -1,0 +1,66 @@
+--- a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
++++ b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+@@ -45,7 +45,7 @@
+ #define X1830_FB_BYTES_PER_PIXEL	2U
+ #define X1830_FB_LINE_LENGTH		(X1830_FB_XRES * X1830_FB_BYTES_PER_PIXEL)
+ #define X1830_FB_FRAME_SIZE		(X1830_FB_LINE_LENGTH * X1830_FB_YRES)
+-#define X1830_FB_FRAME_COUNT		2U
++#define X1830_FB_FRAME_COUNT		3U
+ #define X1830_FB_SIZE			(X1830_FB_FRAME_SIZE * X1830_FB_FRAME_COUNT)
+ #define X1830_FB_PIXEL_CLOCK_HZ		5940000UL
+ 
+@@ -2653,11 +2653,18 @@
+ 
+ 	if (var->xres != X1830_FB_XRES || var->yres != X1830_FB_YRES ||
+ 	    var->bits_per_pixel != 16 || var->xoffset ||
+-	    (var->yoffset != 0 && var->yoffset != X1830_FB_YRES))
++	    (var->yoffset % X1830_FB_YRES) ||
++	    var->yoffset > X1830_FB_YRES * (X1830_FB_FRAME_COUNT - 1))
+ 		return -EINVAL;
+ 
+ 	var->xres_virtual = X1830_FB_XRES;
+-	var->yres_virtual = X1830_FB_YRES * X1830_FB_FRAME_COUNT;
++	/* Preserve two-page boot geometry; honour legacy SDL triple buffering. */
++	if (var->yres_virtual > X1830_FB_YRES * X1830_FB_FRAME_COUNT)
++		return -EINVAL;
++	var->yres_virtual = var->yres_virtual > X1830_FB_YRES * 2 ?
++		X1830_FB_YRES * X1830_FB_FRAME_COUNT : X1830_FB_YRES * 2;
++	if (var->yoffset > var->yres_virtual - X1830_FB_YRES)
++		return -EINVAL;
+ 	var->red.offset = 11;
+ 	var->red.length = 5;
+ 	var->green.offset = 5;
+@@ -2708,7 +2715,11 @@
+ 	int ret;
+ 
+ 	if (var->xoffset ||
+-	    (var->yoffset != 0 && var->yoffset != X1830_FB_YRES))
++	    (var->yoffset % X1830_FB_YRES) ||
++	    var->yoffset > X1830_FB_YRES * (X1830_FB_FRAME_COUNT - 1))
++		return -EINVAL;
++
++	if (var->yoffset + X1830_FB_YRES > info->var.yres_virtual)
+ 		return -EINVAL;
+ 
+ 	scanout = fb->fb_dma + var->yoffset * X1830_FB_LINE_LENGTH;
+@@ -2750,9 +2761,9 @@
+ 	unsigned long size = vma->vm_end - vma->vm_start;
+ 
+ 	/*
+-	 * SDL fbcon maps both RGB565 pages in one VMA.  dma_mmap_coherent()
++	 * SDL fbcon maps its RGB565 pages in one VMA.  dma_mmap_coherent()
+ 	 * performs the same page rounding, so reject only a VMA larger than the
+-	 * page-aligned two-frame allocation.
++	 * page-aligned three-frame allocation.
+ 	 */
+ 	if (vma->vm_pgoff || size > PAGE_ALIGN(X1830_FB_SIZE))
+ 		return -EINVAL;
+@@ -3122,7 +3133,7 @@
+ 	.xres		= X1830_FB_XRES,
+ 	.yres		= X1830_FB_YRES,
+ 	.xres_virtual	= X1830_FB_XRES,
+-	.yres_virtual	= X1830_FB_YRES * X1830_FB_FRAME_COUNT,
++	.yres_virtual	= X1830_FB_YRES * 2,
+ 	.bits_per_pixel	= 16,
+ 	.red		= { .offset = 11, .length = 5 },
+ 	.green		= { .offset = 5, .length = 6 },

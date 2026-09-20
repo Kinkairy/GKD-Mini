@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export GKD_CONFIG_SCHEMA=/etc/gkd-mini/gdkmini.schema
+export GKD_CONFIG_MERGER=/usr/lib/gkd-config-merge.awk
+export GKD_CONFIG_OVERRIDE=/run/gkd-application/config.override.conf
+export GKD_CONFIG_RUN_DIR=/run/gkd-config
+export GKD_CONFIG_STATE_DIR=/run/gkd-config-state
+export GKD_CONFIG_RENAME=/usr/sbin/gkd-config-rename
+[ "$#" -gt 0 ] || { echo 'usage: gkd-application-config apply|validate|dump|get KEY|status' >&2; exit 64; }
+case "$1" in
+apply)
+ [ "$#" = 1 ] || exit 64
+ /usr/sbin/gkd-config apply
+ /usr/sbin/gkd-application-service --control config-save
+ count=0
+ while [ "$count" -lt 150 ]; do
+  state=$(/usr/sbin/gkd-application-service --control config-status) || exit 1
+  case "$state" in
+   'GKD_APPLICATION_CONFIG=SAVED errno=0') printf '%s\n' "$state"; exit 0 ;;
+   'GKD_APPLICATION_CONFIG=SAVING errno=0') ;;
+   *) printf '%s\n' "$state" >&2; exit 1 ;;
+  esac
+  usleep 200000
+  count=$((count+1))
+ done
+ echo 'GKD_APPLICATION_CONFIG=FAILED reason=save-timeout' >&2
+ exit 1
+ ;;
+validate|dump|status) [ "$#" = 1 ] || exit 64; exec /usr/sbin/gkd-config "$@" ;;
+get) [ "$#" = 2 ] || exit 64; exec /usr/sbin/gkd-config "$@" ;;
+*) exit 64 ;;
+esac

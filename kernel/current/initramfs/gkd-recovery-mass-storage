@@ -1,0 +1,86 @@
+#!/bin/sh
+# Explicit, reversible whole-system-card USB export for the offline R runtime.
+set -eu
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+configfs=/sys/kernel/config
+gadget=$configfs/usb_gadget/gkd_recovery
+device=/dev/mmcblk0
+
+write_attr() { [ -e "$1" ] && printf '%s' "$2" >"$1"; }
+teardown() {
+	if [ -d "$gadget" ]; then
+		[ ! -e "$gadget/UDC" ] || printf '' >"$gadget/UDC" 2>/dev/null || true
+		[ ! -e "$gadget/functions/mass_storage.0/lun.0/file" ] ||
+			printf '' >"$gadget/functions/mass_storage.0/lun.0/file" 2>/dev/null || true
+		rm -f "$gadget/configs/c.1/mass_storage.0" 2>/dev/null || true
+		rmdir "$gadget/functions/mass_storage.0" 2>/dev/null || true
+		rmdir "$gadget/configs/c.1/strings/0x409" "$gadget/configs/c.1" \
+			"$gadget/strings/0x409" "$gadget" 2>/dev/null || true
+	fi
+}
+fail() { teardown; printf 'GKD_RECOVERY_USB=BLOCKED reason=%s\n' "$1" >&2; exit 1; }
+mounted_locally() {
+	awk -v d="$device" '$1 == d || index($1, d "p") == 1 {found=1} END {exit !found}' /proc/mounts
+}
+
+start() {
+	[ -b "$device" ] || fail system-device
+	mounted_locally && fail system-card-mounted
+	mkdir -p "$configfs"
+	grep -q " $configfs configfs " /proc/mounts || mount -t configfs none "$configfs"
+	[ -d "$configfs/usb_gadget" ] || fail configfs
+	for candidate in "$configfs"/usb_gadget/*; do
+		[ ! -e "$candidate" ] || fail foreign-gadget
+	done
+	udc=
+	count=0
+	for candidate in /sys/class/udc/*; do
+		[ -e "$candidate" ] || continue
+		udc=${candidate##*/}
+		count=$((count + 1))
+	done
+	[ "$count" = 1 ] || fail udc-count
+	mkdir "$gadget" || fail gadget
+	write_attr "$gadget/idVendor" 0x0525 || fail id-vendor
+	write_attr "$gadget/idProduct" 0xa4a2 || fail id-product
+	write_attr "$gadget/bDeviceClass" 0x00 || fail device-class
+	mkdir -p "$gadget/strings/0x409" "$gadget/configs/c.1/strings/0x409" || fail strings
+	write_attr "$gadget/strings/0x409/serialnumber" GKDRECOVERY || fail serial
+	write_attr "$gadget/strings/0x409/manufacturer" 'GKD Mini' || fail manufacturer
+	write_attr "$gadget/strings/0x409/product" 'System Card Export' || fail product
+	write_attr "$gadget/configs/c.1/strings/0x409/configuration" Recovery || fail config
+	write_attr "$gadget/configs/c.1/MaxPower" 120 || fail max-power
+	mkdir "$gadget/functions/mass_storage.0" || fail mass-storage
+	write_attr "$gadget/functions/mass_storage.0/lun.0/ro" 0 || fail lun-ro
+	write_attr "$gadget/functions/mass_storage.0/lun.0/removable" 1 || fail lun-removable
+	write_attr "$gadget/functions/mass_storage.0/lun.0/nofua" 0 || fail lun-nofua
+	write_attr "$gadget/functions/mass_storage.0/lun.0/file" "$device" || fail lun-file
+	ln -s "$gadget/functions/mass_storage.0" "$gadget/configs/c.1/mass_storage.0" ||
+		fail lun-link
+	write_attr "$gadget/UDC" "$udc" || fail bind
+	printf '%s\n' 'GKD_RECOVERY_USB=PASS action=start card=/dev/mmcblk0'
+}
+
+stop() {
+	teardown
+	sync
+	blockdev --flushbufs "$device"
+	[ ! -e "$gadget" ] || fail teardown
+	printf '%s\n' 'GKD_RECOVERY_USB=PASS action=stop card=/dev/mmcblk0'
+}
+
+status() {
+	if [ -r "$gadget/functions/mass_storage.0/lun.0/file" ]; then
+		printf '%s\n' 'GKD_RECOVERY_USB=ACTIVE card=/dev/mmcblk0'
+	else
+		printf '%s\n' 'GKD_RECOVERY_USB=INACTIVE'
+	fi
+}
+
+[ "$#" = 1 ] || { echo 'usage: gkd-recovery-mass-storage start|stop|status' >&2; exit 64; }
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	status) status ;;
+	*) echo 'usage: gkd-recovery-mass-storage start|stop|status' >&2; exit 64 ;;
+esac

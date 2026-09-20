@@ -1,0 +1,450 @@
+#!/bin/sh
+# A-native, explicitly polled owner for the optional USB ICS address.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+testing=${GKD_APPLICATION_NETWORK_TESTING-0}
+state_root=/run/gkd-application-network
+proc_root=/proc
+ip_command=ip
+ping_command=ping
+dropbear=/usr/sbin/dropbear
+host_key=/run/gkd-round64-ssh/dropbear_rsa_host_key
+if [ "$testing" = 1 ]; then
+	state_root=${GKD_APPLICATION_NETWORK_TEST_STATE_ROOT:?}
+	proc_root=${GKD_APPLICATION_NETWORK_TEST_PROC_ROOT:?}
+	ip_command=${GKD_APPLICATION_NETWORK_TEST_IP:?}
+	ping_command=${GKD_APPLICATION_NETWORK_TEST_PING:?}
+	dropbear=${GKD_APPLICATION_NETWORK_TEST_DROPBEAR:?}
+	host_key=${GKD_APPLICATION_NETWORK_TEST_HOST_KEY:?}
+fi
+
+management_ip=10.1.1.2
+dns_root=/proc/self/fd/3
+dns=$dns_root/resolv.conf
+dns_state=$state_root/dns.state
+dns_backup=$state_root/resolv.backup
+dns_published=$state_root/resolv.published
+dns_owned=$state_root/resolv.owned
+enabled=$state_root/enabled
+ip_owned=$state_root/ip.owned
+route_owned=$state_root/route.owned
+ssh_owned=$state_root/ssh.owned
+ssh_native_pid=$state_root/dropbear.pid
+last_error=$state_root/last-error
+
+blocked()
+{
+	reason=$1
+	mkdir -p "$state_root" 2>/dev/null || true
+	if [ ! -s "$last_error" ] || [ "$(cat "$last_error" 2>/dev/null)" != dns-modified ]; then
+		printf '%s\n' "$reason" >"$last_error.new" 2>/dev/null &&
+			chmod 0600 "$last_error.new" 2>/dev/null &&
+			mv "$last_error.new" "$last_error" 2>/dev/null || true
+	else
+		reason=dns-modified
+	fi
+	printf 'GKD_APPLICATION_NETWORK=blocked reason=%s\n' "$reason"
+	return 1
+}
+
+clear_error()
+{
+	rm -f -- "$last_error" "$last_error.new"
+}
+
+config_value()
+{
+	printf '%s\n' "$config_data" | awk -F= -v wanted="$1" '
+		$1 == wanted { count++; value=substr($0, length($1) + 2) }
+		END { if (count == 1) print value; else exit 1 }
+	'
+}
+
+valid_uint()
+{
+	case "$1" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$1" -ge "$2" ] 2>/dev/null && [ "$1" -le "$3" ] 2>/dev/null
+}
+
+valid_ipv4()
+{
+	case "$1" in .*|*.|*..*) return 1 ;; esac
+	old_ifs=$IFS
+	IFS=.
+	set -- $1
+	IFS=$old_ifs
+	[ "$#" = 4 ] || return 1
+	for octet in "$@"; do
+		case "$octet" in ''|*[!0-9]*) return 1 ;; esac
+		[ "$octet" -le 255 ] 2>/dev/null || return 1
+	done
+}
+
+load_config()
+{
+	config_file=$1
+	[ -f "$config_file" ] && [ ! -L "$config_file" ] || return 1
+	config_size=$(wc -c <"$config_file") || return 1
+	valid_uint "$config_size" 1 16384 || return 1
+	config_data=$(cat -- "$config_file") || return 1
+	iface=$(config_value usb_internet_interface) || return 1
+	internet_ip=$(config_value usb_internet_device_ip) || return 1
+	gateway=$(config_value usb_internet_gateway) || return 1
+	internet_prefix=$(config_value usb_internet_prefix_length) || return 1
+	poll_seconds=$(config_value usb_internet_poll_seconds) || return 1
+	health_timeout=$(config_value usb_internet_health_timeout_seconds) || return 1
+	enable_timeout=$(config_value usb_internet_enable_timeout_seconds) || return 1
+	ssh_port=$(config_value usb_internet_ssh_port) || return 1
+	ssh_idle=$(config_value usb_internet_ssh_idle_seconds) || return 1
+	case "$iface" in ''|*[!A-Za-z0-9_.:-]*|????????????????*) return 1 ;; esac
+	valid_ipv4 "$internet_ip" && valid_ipv4 "$gateway" || return 1
+	[ "$internet_ip" != "$gateway" ] && [ "$internet_ip" != "$management_ip" ] || return 1
+	valid_uint "$internet_prefix" 8 30 &&
+	valid_uint "$poll_seconds" 1 10 &&
+	valid_uint "$health_timeout" 1 10 &&
+	valid_uint "$enable_timeout" 1 15 &&
+	valid_uint "$ssh_port" 1 65535 &&
+	valid_uint "$ssh_idle" 60 86400
+}
+
+has_management_address()
+{
+	"$ip_command" -f inet addr show dev "$iface" 2>/dev/null |
+		grep -Fq "inet $management_ip/"
+}
+
+has_internet_address()
+{
+	"$ip_command" -f inet addr show dev "$iface" 2>/dev/null |
+		grep -Fq "inet $internet_ip/$internet_prefix "
+}
+
+has_owned_route()
+{
+	route_output=$("$ip_command" route 2>/dev/null) || return 1
+	while IFS="$(printf '\t ')" read -r route_default route_via route_gateway route_dev \
+		route_iface route_metric route_value route_extra; do
+		[ "$route_default" = default ] && [ "$route_via" = via ] &&
+			[ "$route_gateway" = "$gateway" ] && [ "$route_dev" = dev ] &&
+			[ "$route_iface" = "$iface" ] && [ "$route_metric" = metric ] &&
+			[ "$route_value" = 50 ] && [ -z "$route_extra" ] && return 0
+	done <<EOF
+$route_output
+EOF
+	return 1
+}
+
+has_any_default_route()
+{
+	"$ip_command" route 2>/dev/null | grep -q '^default '
+}
+
+network_ready()
+{
+	has_management_address && has_internet_address && has_owned_route &&
+		"$ping_command" -c 1 -W "$health_timeout" "$gateway" >/dev/null 2>&1
+}
+
+proc_start()
+{
+	if [ "$testing" = 1 ]; then
+		cat "$proc_root/$1/start" 2>/dev/null
+		return
+	fi
+	awk '$3 != "Z" { print $22 }' "$proc_root/$1/stat" 2>/dev/null
+}
+
+ssh_process_matches()
+{
+	ssh_pid=$1
+	ssh_start=$2
+	[ "$(proc_start "$ssh_pid")" = "$ssh_start" ] || return 1
+	[ "$(cat "$proc_root/$ssh_pid/comm" 2>/dev/null)" = dropbear ] || return 1
+	[ "$(readlink "$proc_root/$ssh_pid/exe" 2>/dev/null)" = "$dropbear" ] || return 1
+	ssh_command=$(tr '\000' ' ' <"$proc_root/$ssh_pid/cmdline" 2>/dev/null) || return 1
+	case "$ssh_command" in
+	*" -F -r $host_key -P $ssh_native_pid -p $internet_ip:$ssh_port -I $ssh_idle "*)
+		return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+ssh_alive()
+{
+	[ -s "$ssh_owned" ] || return 1
+	IFS=' ' read -r ssh_pid ssh_start <"$ssh_owned" || return 1
+	case "$ssh_pid:$ssh_start" in *[!0-9:]*|:*|*:) return 1 ;; esac
+	ssh_process_matches "$ssh_pid" "$ssh_start"
+}
+
+stop_ssh()
+{
+	ssh_pid= ssh_start=
+	if [ -s "$ssh_owned" ]; then
+		IFS=' ' read -r ssh_pid ssh_start <"$ssh_owned" || true
+	fi
+	case "$ssh_pid:$ssh_start" in *[!0-9:]*|:*|*:) ssh_pid=; ssh_start= ;; esac
+	if [ -n "$ssh_pid" ] && ssh_process_matches "$ssh_pid" "$ssh_start"; then
+		kill "$ssh_pid" 2>/dev/null || true
+		ssh_waits=0
+		while ssh_process_matches "$ssh_pid" "$ssh_start" &&
+		      [ "$ssh_waits" -lt 5 ]; do
+			sleep 1
+			ssh_waits=$((ssh_waits + 1))
+		done
+		if ssh_process_matches "$ssh_pid" "$ssh_start"; then
+			kill -9 "$ssh_pid" 2>/dev/null || true
+			sleep 1
+		fi
+	fi
+	rm -f -- "$ssh_owned" "$ssh_owned.new" "$ssh_native_pid"
+}
+
+start_ssh()
+{
+	ssh_alive && return 0
+	stop_ssh
+	[ -x "$dropbear" ] && [ -f "$host_key" ] && [ ! -L "$host_key" ] || return 1
+	"$dropbear" -F -r "$host_key" -P "$ssh_native_pid" \
+		-p "$internet_ip:$ssh_port" -I "$ssh_idle" 3<&- >/dev/null 2>&1 &
+	ssh_pid=$!
+	ssh_waits=0 ssh_start=
+	while [ "$ssh_waits" -lt 5 ]; do
+		ssh_observed_start=$(proc_start "$ssh_pid" 2>/dev/null || true)
+		if [ -z "$ssh_start" ]; then
+			ssh_start=$ssh_observed_start
+		elif [ "$ssh_observed_start" != "$ssh_start" ]; then
+			break
+		fi
+		ssh_native=$(cat "$ssh_native_pid" 2>/dev/null || true)
+		if [ "$ssh_native" = "$ssh_pid" ] &&
+		   ssh_process_matches "$ssh_pid" "$ssh_start"; then
+			printf '%s %s\n' "$ssh_pid" "$ssh_start" >"$ssh_owned.new" || break
+			chmod 0600 "$ssh_owned.new" || break
+			mv "$ssh_owned.new" "$ssh_owned" || break
+			ssh_alive && return 0
+			break
+		fi
+		sleep 1
+		ssh_waits=$((ssh_waits + 1))
+	done
+	if [ -n "$ssh_start" ] && ssh_process_matches "$ssh_pid" "$ssh_start"; then
+		kill "$ssh_pid" 2>/dev/null || true
+	fi
+	stop_ssh
+	return 1
+}
+
+save_dns()
+{
+	[ -d "$dns_root" ] || return 1
+	[ ! -e "$dns_state" ] && [ ! -e "$dns_backup" ] &&
+		[ ! -e "$dns_published" ] && [ ! -e "$dns_owned" ] || return 1
+	if [ -e "$dns" ] || [ -L "$dns" ]; then
+		[ -f "$dns" ] && [ ! -L "$dns" ] || return 1
+		cp -p -- "$dns" "$dns_backup.new" || return 1
+		mv "$dns_backup.new" "$dns_backup" || return 1
+		dns_previous=present
+	else
+		dns_previous=absent
+	fi
+	printf 'nameserver %s\n' "$gateway" >"$dns_published.new" || return 1
+	chmod 0600 "$dns_published.new" || return 1
+	mv "$dns_published.new" "$dns_published" || return 1
+	printf '%s\n' "$dns_previous" >"$dns_state.new" || return 1
+	chmod 0600 "$dns_state.new" || return 1
+	mv "$dns_state.new" "$dns_state" || return 1
+	dns_new=$dns_root/.resolv.conf.gkd-new.$$
+	(set -C; umask 022; cat "$dns_published" >"$dns_new") || return 1
+	chmod 0644 "$dns_new" || { rm -f -- "$dns_new"; return 1; }
+	mv "$dns_new" "$dns" || { rm -f -- "$dns_new"; return 1; }
+	: >"$dns_owned" || return 1
+	return 0
+}
+
+restore_dns()
+{
+	if [ ! -e "$dns_state" ]; then
+		[ ! -e "$dns_owned" ] || return 1
+		rm -f -- "$dns_backup" "$dns_published" "$dns_backup.new" \
+			"$dns_published.new" "$dns_state.new"
+		return 0
+	fi
+	[ -f "$dns_state" ] && [ ! -L "$dns_state" ] &&
+		[ -f "$dns_published" ] && [ ! -L "$dns_published" ] || {
+		blocked dns-state-invalid >/dev/null; return 1;
+	}
+	dns_previous=$(cat "$dns_state") || return 1
+	if [ ! -e "$dns_owned" ]; then
+		if [ -f "$dns" ] && [ ! -L "$dns" ] && cmp -s "$dns" "$dns_published"; then
+			:
+		else
+			case "$dns_previous" in
+			present)
+				[ -f "$dns" ] && [ ! -L "$dns" ] &&
+					[ -f "$dns_backup" ] && cmp -s "$dns" "$dns_backup" || {
+					blocked dns-modified >/dev/null; return 1;
+				}
+				;;
+			absent)
+				[ ! -e "$dns" ] && [ ! -L "$dns" ] || {
+					blocked dns-modified >/dev/null; return 1;
+				}
+				;;
+			*) blocked dns-state-invalid >/dev/null; return 1 ;;
+			esac
+			rm -f -- "$dns_state" "$dns_backup" "$dns_published"
+			return 0
+		fi
+	fi
+	if [ ! -f "$dns" ] || [ -L "$dns" ] || ! cmp -s "$dns" "$dns_published"; then
+		blocked dns-modified >/dev/null
+		return 1
+	fi
+	case "$dns_previous" in
+	present)
+		[ -f "$dns_backup" ] && [ ! -L "$dns_backup" ] || return 1
+		cp -p -- "$dns_backup" "$dns_root/.resolv.conf.gkd-restore.$$" || return 1
+		mv "$dns_root/.resolv.conf.gkd-restore.$$" "$dns" || return 1
+		;;
+	absent) rm -f -- "$dns" || return 1 ;;
+	*) return 1 ;;
+	esac
+	rm -f -- "$dns_state" "$dns_backup" "$dns_published" "$dns_owned"
+	return 0
+}
+
+cleanup_owned()
+{
+	cleanup_result=0
+	stop_ssh
+	if [ -e "$route_owned" ]; then
+		if has_owned_route; then
+			"$ip_command" route del default via "$gateway" dev "$iface" \
+				metric 50 >/dev/null 2>&1 || cleanup_result=1
+		fi
+		[ "$cleanup_result" != 0 ] || rm -f -- "$route_owned"
+	fi
+	if [ -e "$ip_owned" ]; then
+		if has_internet_address; then
+			"$ip_command" addr del "$internet_ip/$internet_prefix" dev "$iface" \
+				>/dev/null 2>&1 || cleanup_result=1
+		fi
+		[ "$cleanup_result" != 0 ] || rm -f -- "$ip_owned"
+	fi
+	restore_dns || cleanup_result=1
+	[ "$cleanup_result" != 0 ] || rm -f -- "$enabled"
+	return "$cleanup_result"
+}
+
+enable_once()
+{
+	if [ -e "$dns_state" ] || [ -e "$ip_owned" ] || [ -e "$route_owned" ] ||
+	   [ -e "$enabled" ]; then
+		cleanup_owned || return 1
+	fi
+	has_management_address || return 1
+	has_internet_address && return 1
+	has_owned_route && return 1
+	has_any_default_route && return 1
+	"$ip_command" addr add "$internet_ip/$internet_prefix" dev "$iface" \
+		>/dev/null 2>&1 || return 1
+	: >"$ip_owned" || { "$ip_command" addr del "$internet_ip/$internet_prefix" \
+		dev "$iface" >/dev/null 2>&1 || true; return 1; }
+	"$ip_command" route add default via "$gateway" dev "$iface" metric 50 \
+		>/dev/null 2>&1 || { cleanup_owned; return 1; }
+	: >"$route_owned" || {
+		"$ip_command" route del default via "$gateway" dev "$iface" metric 50 \
+			>/dev/null 2>&1 || true
+		cleanup_owned
+		return 1
+	}
+	"$ping_command" -c 1 -W "$enable_timeout" "$gateway" >/dev/null 2>&1 || {
+		cleanup_owned; return 1;
+	}
+	save_dns || { cleanup_owned; return 1; }
+	start_ssh || { cleanup_owned; return 1; }
+	: >"$enabled" || { cleanup_owned; return 1; }
+	clear_error
+	return 0
+}
+
+online_result()
+{
+	printf 'GKD_APPLICATION_NETWORK=online ip=%s/%s gateway=%s ssh=%s:%s poll=%s\n' \
+		"$internet_ip" "$internet_prefix" "$gateway" "$internet_ip" \
+		"$ssh_port" "$poll_seconds"
+}
+
+start_or_poll()
+{
+	if [ -e "$enabled" ] || [ -e "$ip_owned" ] || [ -e "$route_owned" ] ||
+	   [ -e "$dns_state" ] || [ -e "$ssh_owned" ]; then
+		if [ -e "$enabled" ] && [ -e "$ip_owned" ] &&
+		   [ -e "$route_owned" ] && [ -e "$dns_state" ] &&
+		   network_ready && ssh_alive; then
+			clear_error
+			online_result
+			return 0
+		fi
+		blocked owned-state-unhealthy
+		return 1
+	fi
+	if enable_once; then
+		online_result
+		return 0
+	fi
+	blocked ics-unavailable-or-state-conflict
+}
+
+status_result()
+{
+	if [ -s "$last_error" ]; then
+		status_reason=$(cat "$last_error" 2>/dev/null || printf unknown)
+		printf 'GKD_APPLICATION_NETWORK=diagnosed reason=%s\n' "$status_reason"
+	elif [ -e "$enabled" ] && [ -e "$ip_owned" ] && [ -e "$route_owned" ] &&
+	     [ -e "$dns_state" ] && has_management_address &&
+	     has_internet_address && has_owned_route && ssh_alive; then
+		online_result
+	elif [ -e "$enabled" ] || [ -e "$ip_owned" ] || [ -e "$route_owned" ] ||
+	     [ -e "$dns_state" ] || [ -e "$ssh_owned" ]; then
+		printf 'GKD_APPLICATION_NETWORK=diagnosed reason=partial-owned-state\n'
+	else
+		printf 'GKD_APPLICATION_NETWORK=idle\n'
+	fi
+}
+
+action=${1-}
+[ "$#" = 3 ] && [ "$2" = 3 ] || { printf '%s\n' \
+	'usage: gkd-application-network start|poll|stop|status 3 CONFIG_SNAPSHOT' >&2; exit 64; }
+[ -d /proc/self/fd/3 ] || { blocked invalid-dns-root; exit 1; }
+[ "$testing" = 1 ] || [ "$(id -u)" = 0 ] || { blocked owner-not-root; exit 1; }
+if [ -e "$state_root" ] || [ -L "$state_root" ]; then
+	[ -d "$state_root" ] && [ ! -L "$state_root" ] || {
+		printf 'GKD_APPLICATION_NETWORK=blocked reason=state-root\n'
+		exit 1
+	}
+else
+	mkdir -m 0700 "$state_root" || {
+		printf 'GKD_APPLICATION_NETWORK=blocked reason=state-root\n'
+		exit 1
+	}
+fi
+chmod 0700 "$state_root" || { blocked state-root; exit 1; }
+load_config "$3" || { blocked invalid-config; exit 1; }
+case "$action" in
+start|poll) start_or_poll ;;
+stop)
+	if cleanup_owned; then
+		clear_error
+		printf 'GKD_APPLICATION_NETWORK=stopped\n'
+	else
+		blocked cleanup-incomplete
+	fi
+	;;
+status) status_result ;;
+*) printf '%s\n' \
+	'usage: gkd-application-network start|poll|stop|status 3 CONFIG_SNAPSHOT' >&2; exit 64 ;;
+esac

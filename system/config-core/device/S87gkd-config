@@ -1,0 +1,8 @@
+#!/bin/sh
+
+case "${1:-start}" in
+	start|restart) /usr/sbin/gkd-config apply ;;
+	stop) : ;;
+	status) /usr/sbin/gkd-config status ;;
+	*) echo 'usage: S87gkd-config {start|stop|restart|status}' >&2; exit 2 ;;
+esac

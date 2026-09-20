@@ -1,0 +1,26 @@
+#!/bin/sh
+# Mark a target boot good only after the existing UI and core services are live.
+set -eu
+request=/dev/mmcblk0
+recovery=/dev/mmcblk0p3
+engine=/usr/sbin/gkd-update-engine
+request_tool=/usr/sbin/gkd-update-request-tool
+[ -x "$engine" ] && [ -x "$request_tool" ] || exit 0
+"$request_tool" show "$request" >/dev/null 2>&1 || exit 0
+(
+	step=0
+	while [ "$step" -lt 30 ]; do
+		if [ -s /run/gkd-usb-chooser/frontend-ready ] &&
+		   pidof simplemenu.real >/dev/null 2>&1 &&
+		   [ -x /usr/sbin/dropbear ]; then
+			"$engine" trial-good "$recovery" /dev/mmcblk0p1 /dev/mmcblk0
+			mkswap "$recovery" >/dev/null
+			"$request_tool" clear-current "$request"
+			sync
+			exit 0
+		fi
+		step=$((step + 1))
+		sleep 1
+	done
+) >/run/gkd-update-trial.log 2>&1 &
+exit 0

@@ -1,0 +1,8 @@
+#!/bin/sh
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+case "${1-start}" in
+	start|restart) /usr/sbin/gkd-ui-layout apply >/dev/null 2>&1 || true ;;
+	stop) ;;
+	*) exit 64 ;;
+esac
+exit 0

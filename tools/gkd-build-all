@@ -1,0 +1,6 @@
+#!/bin/sh
+# Current A-slot build only. Supply the explicit verified inputs described in README.
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+python3 "$root/tools/gkd-source-closure.py"
+exec python3 "$root/system/application-core/scripts/build-minimal-a.py" "$@"

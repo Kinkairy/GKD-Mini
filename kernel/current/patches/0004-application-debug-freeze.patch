@@ -1,0 +1,162 @@
+diff --git a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+index 1cc4bea..3ed580a 100644
+--- a/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
++++ b/drivers/video/fbdev/ingenic-x1830-dpu-fb.c
+@@ -34,6 +34,7 @@
+ #include <linux/pm.h>
+ #include <linux/platform_device.h>
+ #include <linux/pwm.h>
++#include <linux/sched/signal.h>
+ #include <linux/syscore_ops.h>
+ #include <linux/vmalloc.h>
+ #include <linux/workqueue.h>
+@@ -221,6 +222,9 @@ struct x1830_fb {
+ 	bool usb_debug_freeze;
+ 	void *usb_debug_frozen_virt;
+ 	bool usb_debug_frozen_valid;
++	struct pid *user_debug_freeze_owner;
++	u32 user_debug_freeze_sequence;
++	unsigned long user_debug_freeze_expires;
+ 	bool usb_debug_loading_active;
+ 	bool usb_debug_loading_held;
+ 	unsigned long usb_debug_loading_hard_expires;
+@@ -840,6 +844,9 @@ static void x1830_hardware_osd_reassert_locked(struct x1830_fb *fb,
+  * inactive composite buffer periodically in process context while System UI
+  * is visible, then publish it for the following display frame.
+  */
++static bool x1830_user_debug_freeze_live_locked(struct x1830_fb *fb);
++static void x1830_user_debug_freeze_release_locked(struct x1830_fb *fb);
++
+ static void x1830_composite_refresh_work(struct work_struct *work)
+ {
+ 	struct x1830_fb *fb = container_of(to_delayed_work(work),
+@@ -849,6 +856,8 @@ static void x1830_composite_refresh_work(struct work_struct *work)
+ 	mutex_lock(&fb->volume_osd_lock);
+ 	if (fb->volume_osd_removing)
+ 		goto out_unlock;
++	if (fb->user_debug_freeze_owner)
++		x1830_user_debug_freeze_live_locked(fb);
+ 	if (!x1830_overlay_active_locked(fb)) {
+ 		fb->composite_active = false;
+ 		WRITE_ONCE(fb->descs->layer[0].buffer_addr,
+@@ -898,6 +907,28 @@ static int x1830_debug_frozen_capture_locked(struct x1830_fb *fb)
+ 	return 0;
+ }
+ 
++static void x1830_debug_frozen_release_locked(struct x1830_fb *fb);
++
++static void x1830_user_debug_freeze_release_locked(struct x1830_fb *fb)
++{
++	put_pid(fb->user_debug_freeze_owner);
++	fb->user_debug_freeze_owner = NULL;
++	fb->user_debug_freeze_sequence = 0;
++	fb->user_debug_freeze_expires = 0;
++	x1830_debug_frozen_release_locked(fb);
++}
++
++static bool x1830_user_debug_freeze_live_locked(struct x1830_fb *fb)
++{
++	if (!fb->user_debug_freeze_owner)
++		return false;
++	if (time_before(jiffies, fb->user_debug_freeze_expires) &&
++	    !thread_group_exited(fb->user_debug_freeze_owner))
++		return true;
++	x1830_user_debug_freeze_release_locked(fb);
++	return false;
++}
++
+ static void x1830_debug_frozen_release_locked(struct x1830_fb *fb)
+ {
+ 	fb->usb_debug_loading_active = false;
+@@ -2945,6 +2976,72 @@ out:
+ 	return ret;
+ }
+ 
++#if IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
++static int gkd_ui_freeze_submit_ioctl(struct x1830_fb *fb, unsigned long arg)
++{
++	struct gkd_ui_freeze_submit submit;
++	struct pid *owner = task_tgid(current);
++	bool renewing;
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	if (copy_from_user(&submit, (void __user *)arg, sizeof(submit)))
++		return -EFAULT;
++	if (submit.ttl_ms < GKD_UI_FREEZE_MIN_TTL_MS ||
++	    submit.ttl_ms > GKD_UI_FREEZE_MAX_TTL_MS ||
++	    !submit.sequence || submit.reserved[0] || submit.reserved[1])
++		return -EINVAL;
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing) {
++		ret = -ENODEV;
++		goto out_unlock;
++	}
++	renewing = x1830_user_debug_freeze_live_locked(fb);
++	if (renewing && fb->user_debug_freeze_owner != owner) {
++		ret = -EBUSY;
++		goto out_unlock;
++	}
++	if (renewing && submit.sequence <= fb->user_debug_freeze_sequence) {
++		ret = -ESTALE;
++		goto out_unlock;
++	}
++	if (!renewing) {
++		ret = x1830_debug_frozen_capture_locked(fb);
++		if (ret)
++			goto out_unlock;
++		fb->user_debug_freeze_owner = get_pid(owner);
++	}
++	fb->user_debug_freeze_sequence = submit.sequence;
++	fb->user_debug_freeze_expires = jiffies +
++		msecs_to_jiffies(submit.ttl_ms);
++	x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++out_unlock:
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++
++static int gkd_ui_freeze_clear_ioctl(struct x1830_fb *fb)
++{
++	int ret = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
++	mutex_lock(&fb->volume_osd_lock);
++	if (fb->volume_osd_removing) {
++		ret = -ENODEV;
++	} else if (x1830_user_debug_freeze_live_locked(fb) &&
++		   fb->user_debug_freeze_owner != task_tgid(current)) {
++		ret = -EBUSY;
++	} else {
++		x1830_user_debug_freeze_release_locked(fb);
++		x1830_hardware_osd_reassert_locked(fb, fb->latest_scanout_addr);
++	}
++	mutex_unlock(&fb->volume_osd_lock);
++	return ret;
++}
++#endif
++
+ static int x1830_fb_ioctl(struct fb_info *info, unsigned int cmd,
+ 			   unsigned long arg)
+ {
+@@ -2958,6 +3055,10 @@ static int x1830_fb_ioctl(struct fb_info *info, unsigned int cmd,
+ 	case GKD_UI_PLANE_GET_CAPS: return gkd_ui_plane_get_caps(arg);
+ 	case GKD_UI_PLANE_SUBMIT: return gkd_ui_plane_submit_ioctl(fb, arg);
+ 	case GKD_UI_PLANE_CLEAR: return gkd_ui_plane_clear_ioctl(fb);
++#if IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)
++	case GKD_UI_FREEZE_SUBMIT: return gkd_ui_freeze_submit_ioctl(fb, arg);
++	case GKD_UI_FREEZE_CLEAR: return gkd_ui_freeze_clear_ioctl(fb);
++#endif
+ 	default: return -ENOTTY;
+ 	}
+ }
+@@ -3395,6 +3496,7 @@ static int x1830_fb_remove(struct platform_device *pdev)
+ 	if (IS_ENABLED(CONFIG_FB_X1830_USER_PLANE)) {
+ 		x1830_user_menu_release_locked(fb);
+ 		x1830_user_plane_release_locked(fb);
++		x1830_user_debug_freeze_release_locked(fb);
+ 	}
+ 	mutex_unlock(&fb->volume_osd_lock);
+ 	sysfs_remove_bin_file(&info->dev->kobj,

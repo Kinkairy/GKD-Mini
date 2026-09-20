@@ -1,0 +1,23 @@
+{
+  "upstream": "WenQuanYi Bitmap Song v1.0 RC1 (0.9.9.8)",
+  "url": "https://github.com/AmusementClub/Wenquanyi-Bitmap-Song-TTF",
+  "commit": "7724da71817090ba92e76d9d40e3dd43afef25de",
+  "license": "GPL-2.0 with font embedding exception",
+  "copyright": "2004-2010 WenQuanYi Project, Board of Trustees, Qianqian Fang and contributors; Firefly",
+  "selection": "75 native Chinese menu/status codepoints from pinned source; card title only adds fixed menu glyphs. All text-page bodies remain English-only. No full CJK font.",
+  "reproduce": "system/ui-core/scripts/extract-wqy-subset.py --pcf14 wenquanyi_13px.pcf --pcf12 wenquanyi_9pt.pcf --output-dir EMPTY_DIR",
+  "subsets": {
+    "14": {
+      "file": "native-cn-14.hex",
+      "sha256": "38390a9c5535f9ba3cf6dc2003aeed29d35630fa9dc8f4d2bb1557c249d02711",
+      "upstream_file": "Original Fonts/wenquanyi_13px.pcf",
+      "upstream_sha256": "4fdd52dd970801b0989ce1c30a894455af25be8230fda06b49930233b4ce71df"
+    },
+    "12": {
+      "file": "native-cn-12.hex",
+      "sha256": "153219b93f7c9d3012fe85f038f1af7c2b280bd6ca2ff71485ca247ba021a565",
+      "upstream_file": "Original Fonts/wenquanyi_9pt.pcf",
+      "upstream_sha256": "923c0836c9ae367ce422717c851a5fc7ba2326438f4fa88740e4105cfdfbe22f"
+    }
+  }
+}

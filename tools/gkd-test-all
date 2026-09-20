@@ -1,0 +1,61 @@
+#!/bin/sh
+
+set -u
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+failures=0
+total=0
+
+run()
+{
+	total=$((total + 1))
+	printf '\n=== TEST %02d: %s ===\n' "$total" "$1"
+	shift
+	if "$@"; then
+		printf 'RESULT=PASS\n'
+	else
+		code=$?
+		printf 'RESULT=FAIL exit=%s\n' "$code"
+		failures=$((failures + 1))
+	fi
+}
+
+cd "$root" || exit 2
+run config-core python3 system/config-core/tests/test_config_core.py -q
+run application-command-closure python3 system/application-core/tests/test_capsule_commands.py -q
+run application-loop sh system/application-core/tests/run_loop_tests.sh
+run application-profile-mount sh system/application-core/tests/run_profile_tests.sh
+run application-prepare-mount sh system/application-core/tests/run_prepare_mount_tests.sh
+run application-animation sh system/application-core/tests/run_animation_tests.sh
+run application-display sh system/application-core/tests/run_display_tests.sh
+run application-manifest python3 system/application-core/tests/test_manifest.py -q
+run application-diagnostics sh system/application-core/tests/run_diagnostics_tests.sh
+run application-opk-plan sh system/application-core/tests/run_opk_plan_tests.sh
+run kernel-profile-config python3 kernel/current/tests/test_profile_config.py -q
+run ui-core sh system/ui-core/tests/run_ui_core_tests.sh
+run boot-frame sh system/ui-core/tests/run_boot_tests.sh
+run r-poweroff sh system/ui-core/tests/run_power_tests.sh
+run ar-boot-selector python3 system/ar-boot-selector/tests/test_ar_boot_selector.py -q
+run r-slot-capsule python3 system/ar-boot-selector/tests/test_r_slot_capsule.py -q
+run dedicated-r-runtime python3 system/ar-boot-selector/tests/test_dedicated_r_runtime.py -q
+run dedicated-r-update python3 system/ar-boot-selector/tests/test_r_update_adapter.py -q
+run recovery-usb sh system/ui-core/tests/test_recovery_usb.sh
+run service-core python3 system/service-core/tests/test_service_core.py -q
+run source-closure-unit python3 tools/tests/test_source_closure.py -q
+run status-core python3 system/status-core/tests/test_status.py -q
+run ui-network python3 system/rc33-ui-status-layout/tests/test_network_config.py
+run ui-layout python3 system/rc33-ui-status-layout/tests/test_ui_layout.py
+run charge-ics python3 system/rc33-charge-ics-auto/tests/test_static.py
+run card-package python3 system/gkd-card-writer/tests/test_package.py
+run update-package python3 system/rc33-system-update/tests/test_package.py
+run update-request sh system/rc33-system-update/tests/run_request_tests.sh
+run update-journal sh system/rc33-system-update/tests/run_journal_tests.sh
+run update-engine sh system/rc33-system-update/tests/run_engine_tests.sh
+run update-prepare sh system/rc33-system-update/tests/run_prepare_tests.sh
+run update-coordinator sh system/rc33-system-update/tests/run_coordinator_tests.sh
+run update-menu sh system/rc33-system-update/tests/test_menu_entry.sh
+run update-supervisor sh system/rc33-system-update/tests/test_ram_supervisor.sh
+run formal-source-closure python3 tools/gkd-source-closure.py
+
+printf '\nGKD_TEST_ALL total=%s failures=%s windows_only=1\n' "$total" "$failures"
+printf 'WINDOWS_ONLY=system/gkd-card-writer/tests/test_writer_ps51.ps1\n'
+[ "$failures" -eq 0 ]

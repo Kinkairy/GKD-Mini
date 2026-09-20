@@ -1,0 +1,316 @@
+#!/bin/sh
+# A-native owner for the single boot-created gkd_recovery configfs gadget.
+set -eu
+umask 077
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+testing=${GKD_APPLICATION_USB_TESTING-0}
+test_fault=
+configfs=/sys/kernel/config
+udc_root=/sys/class/udc
+proc_root=/proc
+sys_root=/sys
+state_root=/run/gkd-application-usb
+[ "$testing" != 1 ] || {
+	configfs=${GKD_APPLICATION_USB_TEST_CONFIGFS:?}
+	udc_root=${GKD_APPLICATION_USB_TEST_UDC_ROOT:?}
+	proc_root=${GKD_APPLICATION_USB_TEST_PROC_ROOT:?}
+	sys_root=${GKD_APPLICATION_USB_TEST_SYS_ROOT:?}
+	state_root=${GKD_APPLICATION_USB_TEST_STATE_ROOT:?}
+	test_fault=${GKD_APPLICATION_USB_TEST_FAULT-}
+}
+gadget=$configfs/usb_gadget/gkd_recovery
+pending_flush=$state_root/pending-flush
+serial=GKDROUND64R5
+
+blocked()
+{
+	mkdir -p "$state_root" 2>/dev/null || true
+	printf '%s\n' "$1" >"$state_root/last-error" 2>/dev/null || true
+	printf 'GKD_APPLICATION_USB=BLOCKED reason=%s\n' "$1" >&2
+	exit 1
+}
+
+clear_diagnostic()
+{
+	rm -f "$state_root/last-error"
+}
+
+write_attr()
+{
+	if [ "$testing" = 1 ] && [ ! -e "$1" ]; then mkdir -p "${1%/*}"; : >"$1"; fi
+	[ -e "$1" ] || return 1
+	printf '%s\n' "$2" >"$1"
+}
+
+same_link()
+{
+	# configfs emits relative links even when userspace creates an absolute one.
+	# Require the exact real directory; dangling, redirected and foreign targets fail.
+	[ -L "$1" ] && [ -d "$2" ] && [ ! -L "$2" ] &&
+	[ "$(readlink -f "$1")" = "$2" ]
+}
+
+vendor_code_matches()
+{
+	# The target configfs show callback promotes its char through %x. MIPS reads
+	# the same stored 0xcd byte as 0xffffffcd; unsigned-char builds print 0xcd.
+	case "$(cat "$gadget/os_desc/b_vendor_code")" in
+		0xcd|0xffffffcd) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+one_udc()
+{
+	name= count=0
+	for candidate in "$udc_root"/*; do
+		[ -e "$candidate" ] || continue
+		name=${candidate##*/}; count=$((count + 1))
+	done
+	[ "$count" = 1 ] || return 1
+	printf '%s\n' "$name"
+}
+
+require_idle_media()
+{
+	case "$1" in /dev/mmcblk0|/dev/mmcblk1) ;; *) return 1 ;; esac
+	guard=/usr/sbin/gkd-app-card-guard
+	[ "$testing" != 1 ] || guard=${GKD_APPLICATION_USB_TEST_GUARD:?}
+	"$guard" "${1##*/}"
+}
+
+flush_media()
+{
+	if [ "$testing" = 1 ]; then
+		[ "$test_fault" != flush-fail ] || return 1
+		printf '%s\n' "$1" >>"$state_root/flush-log"
+	else
+		sync
+		blockdev --flushbufs "$1"
+	fi
+}
+
+flush_pending()
+{
+	[ -r "$pending_flush" ] || return 0
+	device=$(cat "$pending_flush") || return 1
+	case "$device" in /dev/mmcblk0|/dev/mmcblk1) ;; *) return 1 ;; esac
+	if [ -e "$gadget/functions/mass_storage.0/lun.0/file" ] &&
+	   [ -n "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" ]; then
+		[ "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" = "$device" ] || return 1
+		return 0
+	fi
+	require_idle_media "$device" || return 1
+	flush_media "$device" || return 1
+	rm -f "$pending_flush"
+}
+
+exact_base()
+{
+	udc=$(one_udc) || return 1
+	[ -d "$gadget" ] &&
+	[ "$(cat "$gadget/idVendor")" = 0x0525 ] &&
+	[ "$(cat "$gadget/idProduct")" = 0xa4a2 ] &&
+	[ "$(cat "$gadget/bDeviceClass")" = 0xef ] &&
+	[ "$(cat "$gadget/bDeviceSubClass")" = 0x02 ] &&
+	[ "$(cat "$gadget/bDeviceProtocol")" = 0x01 ] &&
+	[ "$(cat "$gadget/strings/0x409/serialnumber")" = "$serial" ] &&
+	[ "$(cat "$gadget/strings/0x409/manufacturer")" = 'GKD Mini' ] &&
+	[ "$(cat "$gadget/strings/0x409/product")" = 'GKD Mini Recovery' ] &&
+	[ "$(cat "$gadget/configs/c.1/strings/0x409/configuration")" = Recovery ] &&
+	[ "$(cat "$gadget/configs/c.1/MaxPower")" = 120 ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/class")" = ef ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/subclass")" = 04 ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/protocol")" = 01 ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/dev_addr")" = 02:00:00:00:64:01 ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/host_addr")" = 02:00:00:00:64:02 ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/os_desc/interface.rndis/compatible_id")" = RNDIS ] &&
+	[ "$(cat "$gadget/functions/rndis.usb0/os_desc/interface.rndis/sub_compatible_id")" = 5162001 ] &&
+	[ "$(cat "$gadget/os_desc/use")" = 1 ] &&
+	vendor_code_matches &&
+	[ "$(cat "$gadget/os_desc/qw_sign")" = MSFT100 ] &&
+	same_link "$gadget/configs/c.1/rndis.usb0" "$gadget/functions/rndis.usb0" &&
+	same_link "$gadget/os_desc/c.1" "$gadget/configs/c.1" &&
+	case "$(cat "$gadget/UDC")" in ""|"$udc") return 0 ;; *) return 1 ;; esac
+}
+
+sole_controlled_gadget()
+{
+	for candidate in "$configfs"/usb_gadget/*; do
+		[ -e "$candidate" ] || continue
+		[ "$candidate" = "$gadget" ] || return 1
+	done
+	for candidate in "$gadget/functions"/*; do
+		case "${candidate##*/}" in rndis.usb0|acm.GKDROUND64R5|mass_storage.0) ;; *) return 1 ;; esac
+	done
+	for candidate in "$gadget/configs"/*; do
+		[ "$candidate" = "$gadget/configs/c.1" ] || return 1
+	done
+	for candidate in "$gadget/configs/c.1"/*; do
+		[ ! -L "$candidate" ] || {
+			case "${candidate##*/}" in rndis.usb0|acm.GKDROUND64R5|mass_storage.0) ;; *) return 1 ;; esac
+			same_link "$candidate" "$gadget/functions/${candidate##*/}" || return 1
+		}
+	done
+	exact_base
+}
+
+safe_unbind()
+{
+	flush_pending || return 1
+	if [ -e "$gadget/functions/mass_storage.0/lun.0/file" ] &&
+	   [ -n "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" ]; then
+		device=$(cat "$gadget/functions/mass_storage.0/lun.0/file") || return 1
+		require_idle_media "$device" || return 1
+		[ -e "$gadget/functions/mass_storage.0/lun.0/forced_eject" ] || return 1
+		write_attr "$gadget/functions/mass_storage.0/lun.0/forced_eject" 1 || return 1
+		printf '%s\n' "$device" >"$pending_flush" || return 1
+		write_attr "$gadget/functions/mass_storage.0/lun.0/file" '' || return 1
+		[ -z "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" ] || return 1
+		flush_pending || return 1
+	fi
+	udc=$(one_udc) || return 1
+	write_attr "$gadget/UDC" '' || return 1
+	[ "$testing" != 1 ] || [ "$test_fault" != unbind-readback ] ||
+		printf '%s\n' "$udc" >"$gadget/UDC"
+	[ -z "$(cat "$gadget/UDC")" ]
+}
+
+prepare_functions()
+{
+	[ "$testing" != 1 ] || [ "$test_fault" != post-unbind-fail ] || return 1
+	# Preserve the boot RNDIS instance, MACs, network device and SSH process.
+	if [ ! -d "$gadget/functions/acm.GKDROUND64R5" ]; then
+		mkdir "$gadget/functions/acm.GKDROUND64R5" || return 1
+	fi
+	if [ -e "$gadget/configs/c.1/acm.GKDROUND64R5" ] ||
+	   [ -L "$gadget/configs/c.1/acm.GKDROUND64R5" ]; then
+		same_link "$gadget/configs/c.1/acm.GKDROUND64R5" 			"$gadget/functions/acm.GKDROUND64R5" || return 1
+	else
+		ln -s "$gadget/functions/acm.GKDROUND64R5" 			"$gadget/configs/c.1/acm.GKDROUND64R5" || return 1
+	fi
+	if [ ! -d "$gadget/functions/mass_storage.0" ]; then
+		mkdir "$gadget/functions/mass_storage.0" || return 1
+		[ "$testing" != 1 ] || {
+			mkdir -p "$gadget/functions/mass_storage.0/lun.0"
+			write_attr "$gadget/functions/mass_storage.0/lun.0/file" '' &&
+			write_attr "$gadget/functions/mass_storage.0/lun.0/forced_eject" ''
+		}
+	fi
+	rm -f "$gadget/configs/c.1/mass_storage.0" || return 1
+	[ ! -L "$gadget/configs/c.1/mass_storage.0" ]
+}
+
+bind_gadget()
+{
+	udc=$(one_udc) || return 1
+	write_attr "$gadget/UDC" "$udc" || return 1
+	[ "$testing" != 1 ] || [ "$test_fault" != bind-readback ] ||
+		write_attr "$gadget/UDC" ''
+	[ "$(cat "$gadget/UDC")" = "$udc" ]
+}
+
+add_lun()
+{
+	device=$1
+	require_idle_media "$device" || return 1
+	[ -d "$gadget/functions/mass_storage.0" ] || return 1
+	[ "$testing" != 1 ] || mkdir -p "$gadget/functions/mass_storage.0/lun.0"
+	write_attr "$gadget/functions/mass_storage.0/lun.0/ro" 0 &&
+	[ "$(cat "$gadget/functions/mass_storage.0/lun.0/ro")" = 0 ] &&
+	write_attr "$gadget/functions/mass_storage.0/lun.0/removable" 1 &&
+	[ "$(cat "$gadget/functions/mass_storage.0/lun.0/removable")" = 1 ] &&
+	write_attr "$gadget/functions/mass_storage.0/lun.0/nofua" 0 &&
+	[ "$(cat "$gadget/functions/mass_storage.0/lun.0/nofua")" = 0 ] &&
+	write_attr "$gadget/functions/mass_storage.0/lun.0/file" "$device" || return 1
+	[ "$testing" != 1 ] || [ "$test_fault" != add-lun-readback ] ||
+		write_attr "$gadget/functions/mass_storage.0/lun.0/file" ''
+	[ "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" = "$device" ] || return 1
+	ln -s "$gadget/functions/mass_storage.0" 		"$gadget/configs/c.1/mass_storage.0" || return 1
+	same_link "$gadget/configs/c.1/mass_storage.0" 		"$gadget/functions/mass_storage.0"
+}
+
+exact_active()
+{
+	target=$1
+	udc=$(one_udc) || return 1
+	exact_base && [ "$(cat "$gadget/UDC")" = "$udc" ] &&
+	same_link "$gadget/configs/c.1/acm.GKDROUND64R5" 		"$gadget/functions/acm.GKDROUND64R5" || return 1
+	if [ -n "$target" ]; then
+		same_link "$gadget/configs/c.1/mass_storage.0" 			"$gadget/functions/mass_storage.0" &&
+		[ "$(cat "$gadget/functions/mass_storage.0/lun.0/ro")" = 0 ] &&
+		[ "$(cat "$gadget/functions/mass_storage.0/lun.0/removable")" = 1 ] &&
+		[ "$(cat "$gadget/functions/mass_storage.0/lun.0/nofua")" = 0 ] &&
+		[ "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" = "$target" ] &&
+		[ -e "$gadget/functions/mass_storage.0/lun.0/forced_eject" ]
+	else
+		[ ! -L "$gadget/configs/c.1/mass_storage.0" ] &&
+		{ [ ! -e "$gadget/functions/mass_storage.0/lun.0/file" ] ||
+		  [ -z "$(cat "$gadget/functions/mass_storage.0/lun.0/file")" ]; }
+	fi &&
+	[ ! -e "$pending_flush" ]
+}
+
+transition()
+{
+	mode=$1 target=${2-}
+	[ "$testing" = 1 ] || [ "$(id -u)" = 0 ] || blocked owner-not-root
+	sole_controlled_gadget || blocked foreign-or-uncontrolled-gadget
+	[ -z "$target" ] || require_idle_media "$target" || blocked media-busy-or-unreadable
+	safe_unbind || blocked safe-unbind
+	prepare_functions || blocked prepare-functions
+	[ -z "$target" ] || add_lun "$target" || blocked attach-lun
+	bind_gadget || blocked bind-gadget
+	exact_active "$target" || blocked state-readback
+	clear_diagnostic
+	printf 'GKD_APPLICATION_USB=PASS mode=%s serial=%s lun=%s\n' "$mode" "$serial" "${target:-none}"
+}
+
+status()
+{
+	if [ -r "$state_root/last-error" ]; then
+		printf 'GKD_APPLICATION_USB=DIAGNOSED reason=%s\n' "$(cat "$state_root/last-error")"
+		return
+	fi
+	if [ ! -d "$gadget" ]; then
+		printf '%s\n' 'GKD_APPLICATION_USB=INACTIVE'
+		return
+	fi
+	if ! sole_controlled_gadget; then
+		printf '%s\n' 'GKD_APPLICATION_USB=DIAGNOSED reason=foreign-or-uncontrolled-gadget'; return
+	fi
+	if [ -L "$gadget/configs/c.1/mass_storage.0" ]; then
+		device=$(cat "$gadget/functions/mass_storage.0/lun.0/file")
+		case "$device" in /dev/mmcblk1) mode=storage ;; /dev/mmcblk0) mode=debug ;; *)
+			printf '%s\n' 'GKD_APPLICATION_USB=DIAGNOSED reason=unexpected-lun'; return ;; esac
+	else mode=network; device=none; fi
+	[ "$(cat "$gadget/UDC")" = "$(one_udc)" ] || {
+		printf '%s\n' 'GKD_APPLICATION_USB=DIAGNOSED reason=unbound'; return;
+	}
+	target=$device; [ "$target" != none ] || target=
+	exact_active "$target" || {
+		printf '%s\n' 'GKD_APPLICATION_USB=DIAGNOSED reason=state-readback'; return;
+	}
+	printf 'GKD_APPLICATION_USB=ACTIVE mode=%s serial=%s lun=%s\n' "$mode" "$serial" "$device"
+}
+
+[ "$#" = 1 ] || { echo 'usage: gkd-application-usb network|storage|debug|eject|status' >&2; exit 64; }
+if [ "$1" != status ]; then
+	mkdir -p "$state_root" || blocked state-directory
+	[ -d "$state_root" ] && [ ! -L "$state_root" ] || blocked state-directory
+	lock_root=/run/gkd-recovery
+	[ "$testing" != 1 ] || lock_root=$state_root
+	mkdir -p "$lock_root" || blocked operation-lock
+	mkdir "$lock_root/card-operation.lock" 2>/dev/null || blocked operation-busy
+	trap 'rmdir "$lock_root/card-operation.lock"' EXIT
+	trap 'exit 1' HUP INT TERM
+fi
+case "$1" in
+	network) transition network ;;
+	storage) transition storage /dev/mmcblk1 ;;
+	debug) transition debug /dev/mmcblk0 ;;
+	eject) transition network ;;
+	status) status ;;
+	*) echo 'usage: gkd-application-usb network|storage|debug|eject|status' >&2; exit 64 ;;
+esac
