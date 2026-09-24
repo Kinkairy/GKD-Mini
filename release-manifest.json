@@ -2,8 +2,8 @@
   "project": "GKD Mini",
   "version": "RC3.6",
   "kind": "public-source-snapshot",
-  "source_ref": "77dea4276dfe527f7218091bc82837dc5f841de7",
-  "source_tree": "3719919a60be09edc5d7fff460c177ff9d96acc4",
+  "source_ref": "7a5562a3ed4349d347ebb5ae4023e4f19f41d2c2",
+  "source_tree": "ce1a7105b8feb7b773d7ab2f657a2999d93f0c7b",
   "firmware_distributed": false,
   "full_public_firmware_build_verified": false,
   "omitted_build_inputs": [
