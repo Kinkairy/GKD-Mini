@@ -2,7 +2,7 @@
 
 面向 **原版 GKD Mini（Ingenic X1830 / GKD350）** 的 Linux 6.1.28 系统项目。当前使用 SimpleMenu 作为游戏前端。**不支持 GKD Mini Plus。**
 
-这是 RC3.6 的公开源码快照，包含系统服务、共享 UI、内核补丁、构建脚本和测试。首次公开仓采用独立历史；版本号对应已验收的 RC3.6 功能基线。公开树进行了构建路径规范化，不能据此声称与已安装固件逐字节一致。
+这是 RC3.6 的公开源码快照，包含系统服务、共享 UI、内核补丁、构建脚本和测试。首次公开仓采用独立历史；版本号对应已在原版 GKD Mini 上验收的 RC3.6 F 版功能基线。公开树进行了构建路径规范化，不能据此声称与已安装固件逐字节一致。
 
 **当前不提供固件下载或空白卡镜像。** 完整固件构建依赖未随仓库分发的原机用户态输入、工具链及启动图片，详见[构建说明](docs/BUILDING.md)。
 
@@ -27,7 +27,7 @@ Linux 6.1.28 system software for the **original GKD Mini (X1830 / GKD350)**, wit
 
 RC3.6 provides application lifecycle management, configurable input routing, shared menus/OSD/loading, screenshots, USB mode management, power handling, and signed A/R system updates. This repository publishes source, patches and tests. It does **not** distribute a firmware image, ROMs, BIOS files, emulator packages, recovery images or signing keys.
 
-The public snapshot normalizes build-host paths and omits an unreviewed boot image. Full firmware reproduction still requires external inputs; see [BUILDING](docs/BUILDING.md). Existing hardware acceptance applies to the development RC3.6 firmware, not a separately built public image. See [STATUS](docs/STATUS.md) for verified behavior and remaining work.
+The public snapshot normalizes build-host paths and omits an unreviewed boot image. Full firmware reproduction still requires external inputs; see [BUILDING](docs/BUILDING.md). Existing hardware acceptance applies to the RC3.6 F firmware, not a separately built public image. See [STATUS](docs/STATUS.md) for verified behavior and remaining work.
 
 ## License
 

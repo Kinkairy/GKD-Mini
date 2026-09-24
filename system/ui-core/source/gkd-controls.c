@@ -8,6 +8,7 @@
 #include "gkd-menu-guard.h"
 #include "gkd-ui.h"
 #include "gkd-ui-plane-client.h"
+#include "gkd-controls-command.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -453,6 +454,34 @@ static int input_cycle(struct gkd_controls_state *state, struct pollfd pollers[2
         gkd_controls_tick(state, now)) return -1;
     return 0;
 }
+static int command_open(void)
+{
+    struct sockaddr_un address={.sun_family=AF_UNIX};struct stat st;
+    int fd=socket(AF_UNIX,SOCK_DGRAM|SOCK_NONBLOCK|SOCK_CLOEXEC,0);
+    mode_t previous;
+    if(fd<0)return -1;
+    if(lstat(GKD_CONTROLS_COMMAND_SOCKET,&st)==0){
+        if(!S_ISSOCK(st.st_mode)||st.st_uid||unlink(GKD_CONTROLS_COMMAND_SOCKET))goto fail;
+    }else if(errno!=ENOENT)goto fail;
+    strcpy(address.sun_path,GKD_CONTROLS_COMMAND_SOCKET);
+    previous=umask(0177);
+    int bound=bind(fd,(struct sockaddr *)&address,sizeof(address));
+    umask(previous);
+    if(bound)goto fail;
+    return fd;
+fail:{int saved=errno;close(fd);errno=saved;return -1;}
+}
+static int command_drain(struct controller *c,int fd)
+{
+    for(unsigned batch=0;batch<8U;batch++){
+        char command=0;
+        ssize_t got=recv(fd,&command,1,MSG_DONTWAIT|MSG_TRUNC);
+        if(got<0)return errno==EAGAIN||errno==EWOULDBLOCK?0:-1;
+        if(got!=1||command!=GKD_CONTROLS_COMMAND_BRIGHTNESS)continue;
+        if(effect(c,GKD_CONTROLS_ACTION_BRIGHTNESS,0))return -1;
+    }
+    return 0;
+}
 int main(int argc, char **argv)
 {
     struct controller c = {0};
@@ -462,9 +491,9 @@ int main(int argc, char **argv)
     struct gkd_menu_guard_controls menu;
     struct gkd_ui_plane_caps caps;
     struct sigaction action;
-    struct pollfd pollers[2];
+    struct pollfd pollers[3];
     unsigned short keys[2][3] = {{KEY_KPPLUS, KEY_KPMINUS, KEY_END}, {0,0,0}};
-    int ctl=-1, brightness=-1, maximum=-1, gate=-1, lock=-1;
+    int ctl=-1, brightness=-1, maximum=-1, gate=-1, lock=-1,command=-1;
     int result=1, dropped[2]={0,0}, managed, ready_fd=-1, menu_busy=0;
     uint64_t menu_epoch=0, previous_epoch=0;
 
@@ -527,10 +556,11 @@ int main(int argc, char **argv)
                 &c.ui, &c.font, &preflight)) goto done;
         }
     }
-    if (gkd_input_observer_open(&input) || now_ms(&now) ||
+    if ((command=command_open())<0||gkd_input_observer_open(&input) || now_ms(&now) ||
         gkd_controls_init(&state, &config, effect, &c)) goto done;
     pollers[0] = (struct pollfd){input.physical_fd, POLLIN, 0};
     pollers[1] = (struct pollfd){input.virtual_fd, POLLIN, 0};
+    pollers[2] = (struct pollfd){command, POLLIN, 0};
     if (resume_generation(gate, &previous_generation) ||
         gkd_controls_set_blocked(&state, true, now)) goto done;
     for (unsigned s=0; s<2U; ++s) {
@@ -559,7 +589,7 @@ int main(int argc, char **argv)
         if (now_ms(&now)) goto done;
         timeout = gkd_controls_timeout_ms(&state, now);
         if (timeout >= 0 && timeout < wait_ms) wait_ms = (int)timeout;
-        ready = poll(pollers, 2, wait_ms);
+        ready = poll(pollers, 3, wait_ms);
         if (ready < 0) { if (errno == EINTR) continue; goto done; }
         if (stopped) break;
         if (now_ms(&now) || resume_generation(gate, &generation)) goto done;
@@ -572,6 +602,8 @@ int main(int argc, char **argv)
         previous_generation = generation;
         if (resumed || barrier) pending_clear(&c);
         if (input_cycle(&state, pollers, keys, dropped, now, resumed || barrier, menu_busy)) goto done;
+        if(pollers[2].revents&(POLLERR|POLLHUP|POLLNVAL))goto done;
+        if((pollers[2].revents&POLLIN)&&command_drain(&c,command))goto done;
         if (!resumed && !barrier && pending_cycle(&c, now, 0)) goto done;
         gkd_menu_guard_controls_release(&menu);
         if (flush_state(&c, now, 0)) goto done;
@@ -586,8 +618,9 @@ done:
     }
     gkd_input_observer_close(&input);
     gkd_ui_font_release(&c.font);
-    { int fds[] = {ctl,brightness,maximum,gate,c.framebuffer,lock,c.state_fd,ready_fd};
+    { int fds[] = {ctl,brightness,maximum,gate,c.framebuffer,lock,c.state_fd,ready_fd,command};
       for (unsigned i=0; i<sizeof(fds)/sizeof(fds[0]); ++i) if (fds[i]>=0) (void)close(fds[i]); }
+    if(command>=0)(void)unlink(GKD_CONTROLS_COMMAND_SOCKET);
     return result;
 usage:
     fputs("usage: gkd-controls STEP BRIGHTNESS_STEPS TTL_MS OSD_ENABLED|disabled EFFECTS_ENABLED|disabled VOLUME_UP_KEY VOLUME_DOWN_KEY BRIGHTNESS_KEY [--managed STATE_FD READY_FD PERSIST SAVE_DELAY DEFAULT_VOLUME DEFAULT_BRIGHTNESS]\n", stderr);

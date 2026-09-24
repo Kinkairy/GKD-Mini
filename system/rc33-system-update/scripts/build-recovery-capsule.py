@@ -547,12 +547,25 @@ def main() -> int:
     os.utime(root, (FIXED_TIME, FIXED_TIME), follow_symlinks=False)
 
     raw = arguments.output.with_suffix(".squashfs")
+    # Stable size order improves cross-file compression without dropping bytes,
+    # changing the gzip format, moving slots or weakening the capacity guard.
+    sort_options = []
+    if arguments.layout == "application-a":
+        ordered = sorted((p for p in root.rglob("*") if p.is_file() and not p.is_symlink()),
+                         key=lambda p: (p.stat().st_size, str(p.relative_to(root))))
+        if len(ordered) > 30000 or any(any(c.isspace() for c in str(p)) for p in ordered):
+            raise SystemExit("GKD_APP_CAPSULE=BLOCKED sort-input")
+        order_file = arguments.output.with_suffix(".sort")
+        order_file.write_text("".join(str(p) + " " + str(30000-i) + "\n"
+                                      for i, p in enumerate(ordered)), encoding="utf-8")
+        sort_options = ["-sort", str(order_file)]
     subprocess.run([
         "mksquashfs", str(root), str(raw), "-noappend", "-comp", "gzip",
         "-b", "1048576" if arguments.layout == "application-a" else "131072",
         "-all-root", "-no-exports", "-no-xattrs",
         "-mkfs-time", str(FIXED_TIME), "-all-time", str(FIXED_TIME),
         "-processors", "1", "-no-progress",
+        *sort_options,
     ], check=True)
     raw_bytes = raw.stat().st_size
     if raw_bytes >= FIXED_CAPSULE_BYTES:

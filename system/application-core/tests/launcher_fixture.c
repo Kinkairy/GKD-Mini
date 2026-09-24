@@ -4,9 +4,15 @@
 #define GKD_APP_LAUNCH_OWNER GAME_DIR "/owner"
 #define gkd_app_menu_prepare fixture_menu_prepare
 #define gkd_app_game_wait fixture_game_wait
+#include <stdlib.h>
+#include "gkd-app-storage.h"
+/* Storage uses a separate real-mount fixture; this fixture owns lifecycle. */
+static int fixture_storage_game(void){return 0;}
+#define gkd_storage_game fixture_storage_game
 #define main launcher_main
 #include "../source/gkd-app-launcher.c"
 #undef main
+#undef gkd_storage_game
 #undef gkd_app_game_wait
 #undef gkd_app_menu_prepare
 #include <assert.h>

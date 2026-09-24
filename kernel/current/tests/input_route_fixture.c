@@ -116,6 +116,20 @@ int main(void)
  c=configuration();c.maps[0].source=c.trigger;assert(gkd_menu_ioctl_locked(&f,GKD_MENU_VT_CONFIG,(unsigned long)(uintptr_t)&c)==-EINVAL);
  c=configuration();c.hold_ms=501;assert(gkd_menu_ioctl_locked(&f,GKD_MENU_VT_CONFIG,(unsigned long)(uintptr_t)&c)==-EINVAL);
  assert(gkd_menu_ioctl_locked(&f,0,0)==-ENOTTY);assert(!gkd_menu_release(NULL,&f));
+ /* Raw filters brightness and reserves HOME for a MENU-only pulse. Game
+  * buttons remain unmapped, while the controls observer sees KEY_END. */
+ memset(&a,0,sizeof(a));h=handle(&a);f=fresh();memset(&c,0,sizeof(c));
+ c.version=GKD_MENU_VT_VERSION;c.hold_ms=100;c.trigger=KEY_HOME;
+ c.count=1;c.keys[0]=KEY_ESC;
+ c.map_count=1;c.maps[0]=(struct gkd_input_route_map){KEY_END,0};
+ configure(&f,&c);events=0;
+ key(&h,KEY_END,1);key(&h,KEY_END,2);key(&h,KEY_END,0);assert(!events);
+ key(&h,KEY_HOME,1);key(&h,KEY_HOME,0);assert(!events);
+ assert(!gkd_menu_ioctl_locked(&f,GKD_MENU_VT_PULSE,0));
+ assert(events==1&&last_key==KEY_ESC&&last_value==1);
+ gkd_menu_finish(gkd_menu_lease,0);assert(events==2&&last_key==KEY_ESC&&last_value==0);
+ gkd_menu_lease->pending=false;
+ assert(!gkd_menu_release(NULL,&f));free(h.private);
  /* System MENU prefix uses the same real VT filter in raw and mapped modes.
   * Native L2 Pause is never involved in the screenshot sequence. */
  memset(&a,0,sizeof(a));memset(&b,0,sizeof(b));h=handle(&a);other=handle(&b);

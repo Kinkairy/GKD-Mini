@@ -44,13 +44,13 @@ int main(int argc,char **argv)
  write_file(GKD_MENU_DEVICE,"");struct stat st;assert(!stat(GKD_MENU_DEVICE,&st));route_inode=st.st_ino;route_device=st.st_dev;
  struct gkd_app_menu_launch m=GKD_APP_MENU_LAUNCH_INIT;
  settings(original,"raw");write_file(GKD_MENU_CONFIG_DEFAULT,"invalid");
- assert(!gkd_app_menu_prepare(&m,-1,"bad","bad",0,NULL)&&m.fd<0&&!configurations&&!pulses);
+ assert(gkd_app_menu_prepare(&m,-1,"bad","bad",0,NULL)<0&&m.fd<0);
  write_file("/out/opk","fixture-only-image");int opk=open("/out/opk",O_RDONLY);assert(opk>=0);char hash[65];assert(!digest(opk,hash));
  char base[1024],user[2048];
  snprintf(base,sizeof(base),"version=2\n[core]\nopk_sha256=%s\ndesktop=game.desktop\nexec=game\naction=native\nmap.l1=59\n",hash);
  write_file(GKD_MENU_CONFIG_DEFAULT,base);
  settings(original,"xbox");assert(!gkd_app_menu_prepare(&m,opk,"game.desktop","game",0,NULL));
- assert(m.fd>=0&&configurations==1&&!pulses&&configured.version==2&&configured.count==1&&configured.keys[0]==KEY_HOME&&configured.map_count==5);
+ assert(m.fd>=0&&configurations==1&&!pulses&&configured.version==2&&configured.count==1&&configured.keys[0]==KEY_HOME&&configured.map_count==6);
  gkd_app_menu_close(&m);
  const char *catalog="/media/data/local/etc/gkd-mini/input-routing.conf";
  snprintf(user,sizeof(user),"%s[side-attack]\nopk_sha256=%s\ndesktop=game.desktop\nexec=game\naction=native\nrom=/media/sdcard/roms/Test Game.rom\nmap.side_dot=KEY_SPACE\n",base,hash);
@@ -62,6 +62,12 @@ int main(int argc,char **argv)
  write_file(catalog,"invalid");assert(gkd_app_menu_prepare(&m,opk,"game.desktop","game",1,game)<0&&m.fd<0);
  assert(!unlink(catalog));assert(!symlink(GKD_MENU_CONFIG_DEFAULT,catalog));assert(gkd_app_menu_prepare(&m,opk,"game.desktop","game",0,NULL)<0&&m.fd<0);assert(!unlink(catalog));
  assert(!chmod("/media/data/local/etc/gkd-mini",0777));assert(gkd_app_menu_prepare(&m,opk,"game.desktop","game",0,NULL)<0&&errno==EPERM&&m.fd<0);
- settings(original,"raw");assert(!gkd_app_menu_prepare(&m,opk,"game.desktop","game",0,NULL)&&m.fd<0&&!pulses);
- close(opk);puts("GKD_INPUT_LAUNCH=PASS real-config/hash/selection raw-bypass/no-auto-open/native/game-override/unknown/invalid/symlink/parent-permissions");return 0;
+ assert(!chmod("/media/data/local/etc/gkd-mini",0755));
+ write_file(catalog,base);
+ settings(original,"raw");assert(!gkd_app_menu_prepare(&m,opk,"game.desktop","game",0,NULL)&&m.fd>=0&&
+                              configured.trigger==KEY_HOME&&configured.map_count==1&&configured.count==1&&
+                              configured.keys[0]==KEY_HOME&&configured.maps[0].source==KEY_END&&
+                              configured.maps[0].target==0&&!pulses);
+ gkd_app_menu_close(&m);
+ close(opk);puts("GKD_INPUT_LAUNCH=PASS real-config/hash/selection raw-menu-route/no-auto-open/native/game-override/unknown/invalid/symlink/parent-permissions");return 0;
 }

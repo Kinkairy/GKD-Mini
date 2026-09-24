@@ -36,7 +36,9 @@ int gkd_menu_config_select(const struct gkd_menu_config *, const char *opk_sha25
                           struct gkd_menu_profile *);
 int gkd_menu_config_select_game(const struct gkd_menu_config *, const char *, const char *,
                                 const char *, int, char *const [], struct gkd_menu_profile *);
-/* Compile the frozen game scheme. raw is a deliberate bypass (returns 0). */
-int gkd_input_route_compile(unsigned, unsigned short, const struct gkd_menu_profile *, struct gkd_menu_vt_config *);
+/* Every style keeps the hardware brightness key out of emulator VT input.
+ * Raw keeps the other keys unchanged, including the native MENU key. */
+int gkd_input_route_compile(unsigned, unsigned short, unsigned short,
+                            const struct gkd_menu_profile *, struct gkd_menu_vt_config *);
 const char *gkd_menu_action_name(enum gkd_menu_action);
 #endif

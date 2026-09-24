@@ -22,6 +22,7 @@ int main(int argc,char **argv)
  assert(s.usb_notify_ms==1600);
  assert(s.usb_default==0&&s.power_default==0&&s.auto_suspend_seconds==600);
  assert(s.battery_curve[4]==4200&&s.battery_leds[2]==75&&!strcmp(s.keys[2],"KEY_LEFTCTRL"));
+ assert(!strcmp(s.brightness_key,"KEY_END"));
  /* Existing explicit zero remains valid after changing fresh defaults. */
  strcpy(changed,original);char *sleep=strstr(changed,"auto_suspend_timeout_seconds=600\n");assert(sleep);
  memmove(sleep+strlen("auto_suspend_timeout_seconds="),sleep+strlen("auto_suspend_timeout_seconds=")+2,

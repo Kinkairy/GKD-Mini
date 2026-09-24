@@ -143,10 +143,13 @@ static enum gkd_app_lifecycle_action flow_action(
             GKD_LIFECYCLE_ACTION_USB_CHARGE :
             GKD_LIFECYCLE_ACTION_NONE;
     case FLOW_STORAGE_ENTER: {
+        /* SimpleMenu retains game-card descriptors while browsing. An idle
+         * frontend must exit before its card can become a USB LUN. */
         static const enum gkd_app_lifecycle_action actions[] = {
             GKD_LIFECYCLE_ACTION_MENU_RELEASE,
-            GKD_LIFECYCLE_ACTION_APP_PAUSE,
-            GKD_LIFECYCLE_ACTION_GAME_UNMOUNT,
+            GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK,
+            GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE,
+            GKD_LIFECYCLE_ACTION_APP_STOP,
             GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME
         };
         return lifecycle->step < sizeof(actions) / sizeof(actions[0]) ?
@@ -156,8 +159,8 @@ static enum gkd_app_lifecycle_action flow_action(
         static const enum gkd_app_lifecycle_action actions[] = {
             GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN,
             GKD_LIFECYCLE_ACTION_USB_FLUSH,
-            GKD_LIFECYCLE_ACTION_GAME_MOUNT,
-            GKD_LIFECYCLE_ACTION_APP_RESUME
+            GKD_LIFECYCLE_ACTION_APP_START,
+            GKD_LIFECYCLE_ACTION_DISPLAY_THAW
         };
         return lifecycle->step < sizeof(actions) / sizeof(actions[0]) ?
             actions[lifecycle->step] : GKD_LIFECYCLE_ACTION_NONE;
@@ -230,10 +233,9 @@ static enum gkd_app_lifecycle_action flow_action(
 
 static void start_leave(struct gkd_app_lifecycle *lifecycle)
 {
-    lifecycle->flow =
-        lifecycle->flow == FLOW_DEBUG_ENTER ||
-        lifecycle->usb == GKD_LIFECYCLE_USB_SYSTEM ||
-        lifecycle->display_frozen ?
+    /* Both USB flows freeze the display now. The enter flow, not display
+     * state or an uncertain LUN, determines the matching recovery path. */
+    lifecycle->flow = lifecycle->flow == FLOW_DEBUG_ENTER ?
         FLOW_DEBUG_LEAVE : FLOW_STORAGE_LEAVE;
     lifecycle->step = 0U;
     lifecycle->leave_requested = 0U;
@@ -294,8 +296,11 @@ static int skip_action(const struct gkd_app_lifecycle *lifecycle,
         return lifecycle->game_media == GKD_LIFECYCLE_MEDIA_MOUNTED;
     if (action == GKD_LIFECYCLE_ACTION_APP_RESUME)
         return !lifecycle->app_paused;
+    if (action == GKD_LIFECYCLE_ACTION_APP_STOP)
+        return !lifecycle->app_running;
     if (action == GKD_LIFECYCLE_ACTION_APP_START)
-        return lifecycle->app_running && lifecycle->app_ready;
+        return !lifecycle->card_present ||
+            (lifecycle->app_running && lifecycle->app_ready);
     if (action == GKD_LIFECYCLE_ACTION_DISPLAY_THAW)
         return !lifecycle->display_frozen;
     return 0;
@@ -421,8 +426,21 @@ int gkd_app_lifecycle_init(struct gkd_app_lifecycle *lifecycle,
     lifecycle->requested_generation = active_generation;
     lifecycle->app_running = 1U;
     lifecycle->app_ready = 1U;
+    lifecycle->card_present = 1U;
     lifecycle->begin = begin;
     lifecycle->opaque = opaque;
+    return 0;
+}
+
+int gkd_app_lifecycle_init_no_app(struct gkd_app_lifecycle *lifecycle,
+    gkd_app_lifecycle_begin_fn begin, void *opaque)
+{
+    if (gkd_app_lifecycle_init(lifecycle, 1U, begin, opaque))
+        return -1;
+    lifecycle->app_running = 0U;
+    lifecycle->app_ready = 0U;
+    lifecycle->card_present = 0U;
+    lifecycle->game_media = GKD_LIFECYCLE_MEDIA_UNMOUNTED;
     return 0;
 }
 
@@ -540,10 +558,13 @@ int gkd_app_lifecycle_event(struct gkd_app_lifecycle *lifecycle,
     if (event == GKD_LIFECYCLE_EVENT_RETURN ||
         event == GKD_LIFECYCLE_EVENT_DETACH)
         return leave_event(lifecycle);
-    if(event==GKD_LIFECYCLE_EVENT_CARD_REFRESH){
+    if(event==GKD_LIFECYCLE_EVENT_CARD_REFRESH ||
+       event==GKD_LIFECYCLE_EVENT_CARD_REMOVED){
         if(lifecycle->pending_action!=GKD_LIFECYCLE_ACTION_NONE||lifecycle->usb!=GKD_LIFECYCLE_USB_NONE||
            (lifecycle->state!=GKD_LIFECYCLE_ACTIVE&&!(lifecycle->state==GKD_LIFECYCLE_RECOVERY&&
-             lifecycle->failed_action==GKD_LIFECYCLE_ACTION_GAME_MOUNT)))return reject(EBUSY);
+             (lifecycle->failed_action==GKD_LIFECYCLE_ACTION_GAME_MOUNT||
+              lifecycle->failed_action==GKD_LIFECYCLE_ACTION_APP_START))))return reject(EBUSY);
+        lifecycle->card_present=event==GKD_LIFECYCLE_EVENT_CARD_REFRESH;
         return start_flow(lifecycle,FLOW_CARD_REFRESH);
     }
     if (event == GKD_LIFECYCLE_EVENT_RETRY) {

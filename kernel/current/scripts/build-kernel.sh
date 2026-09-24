@@ -9,6 +9,7 @@ image=local/c-builder:2026.08.02-kernel
 image_id=sha256:43526337ccf802bc40fac6745f099c3686a7deca335cab780b5bcd76e64d63a1
 source_root=/opt/gkd-build/private-state/gkd-mini-system-rebuild/kernel-sources/ingenic-community-linux-6.1
 toolchain=/opt/gkd-build/.cache/gkd-mini-v1.2/ingenic-toolchain-v5.2
+zopfli_archive=/opt/gkd-build/private-state/gkd-mini-system-rebuild/rc3.6-build-inputs/zopfli-1.0.3.tar.gz
 
 case "$output" in
   /tmp/gkd-mini-public/gkd-kernel-current-*|/opt/gkd-build/artifacts/gkd-mini-system-rebuild/kernel/current-*) ;;
@@ -40,6 +41,7 @@ docker run --rm --network none --user "$(id -u):$(id -g)" \
   -v "$project:/workspace:ro" \
   -v "$source_root:$source_root:rw" \
   -v "$toolchain:$toolchain:ro" \
+  -v "$zopfli_archive:$zopfli_archive:ro" \
   -v /tmp/gkd-mini-public:/tmp/gkd-mini-public:rw \
   -v "${output%/*}:${output%/*}:rw" \
   "$image" sh /workspace/kernel/current/scripts/build-in-container.sh "$output"

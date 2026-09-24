@@ -2,11 +2,13 @@
 
 ## Acceptance scope
 
-The development RC3.6 A/R firmware was installed, fully read back and boot-tested on the original GKD Mini. Recorded checks include shared UI/loading, input and sound, suspend/resume, game-card removal/insertion, USB STORAGE/DEBUG, A/R startup and normal shutdown. A signed update reaching MARK_GOOD was verified in the preceding accepted development lineage; RC3.6 also rejected an invalid update package. These are retained development acceptance results, not tests of a newly built public firmware image.
+The RC3.6 F 4 GiB image was written to the original GKD Mini system card, read back in full, and boot-tested in both A and R environments. Its private delivery artifact is 4,294,967,296 bytes with SHA-256 `af9c74e0a4952c936a21ce9317528c9170f7f8bf7dce52bd24f41ab07ad887bc`. The public repository does not contain the image or device-specific input data. The public source has normalized build paths, so its source hash differs from the private firmware build.
 
-35 host test groups and focused service sanitizer/update-entry checks passed during RC3.6 closeout. Public-source packaging checks are separately recorded in the release manifest. Real forced power-loss recovery and clean-card installation have not been accepted. Low-battery protection was exercised by simulated thresholds at a safe charge level, not by deliberately exhausting the cell.
+The accepted device checks cover audio heard by the owner, press and release events from all 18 non-power physical keys, real deep-sleep wake, settings and menus, USB STORAGE/DEBUG return, USB Internet DNS/HTTP, and physical game-card removal and reinsertion with automatic list recovery. A, R and a normal return to A were boot-tested. Representative games from 22 platforms launched; FBN, mGBA and SMS Plus GX state files were restored across emulator processes. These are representative checks, not full playthroughs of every ROM. A previous SMS black-screen observation was withdrawn after a timed readback showed the normal startup sequence with the same state file and emulator binary.
 
-Existing emulator acceptance includes MD32X controls/sound/MENU and TMNT2 controls/sound/menu. TMNT2 starts with X and uses the single-dot key for coin insertion in the tested mapping. DOSBox exposes its native SELECT+START menu; RAW input does not provide the unified MENU adapter. Do not interpret these examples as every game being fully play-tested.
+The private source and firmware build passed 38 host test groups and the F A/R build checks. Public packaging validation is recorded separately in `release-manifest.json`; it does not establish that the normalized public tree can reproduce the private firmware image. Real forced power-loss recovery and clean-card installation have not been accepted. Low-battery protection was exercised by simulated thresholds at a safe charge level, not by deliberately exhausting the cell.
+
+Automatic landscape/portrait detection and single-dot-key remapping to Y were deferred by the owner. They are not included in this RC3.6 baseline.
 
 ## Next-stage work
 

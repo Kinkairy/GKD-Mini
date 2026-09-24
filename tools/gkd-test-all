@@ -22,6 +22,7 @@ run()
 cd "$root" || exit 2
 run config-core python3 system/config-core/tests/test_config_core.py -q
 run application-command-closure python3 system/application-core/tests/test_capsule_commands.py -q
+run application-storage sh system/application-core/tests/run_storage_tests.sh
 run application-loop sh system/application-core/tests/run_loop_tests.sh
 run application-profile-mount sh system/application-core/tests/run_profile_tests.sh
 run application-prepare-mount sh system/application-core/tests/run_prepare_mount_tests.sh
@@ -31,6 +32,7 @@ run application-manifest python3 system/application-core/tests/test_manifest.py 
 run application-diagnostics sh system/application-core/tests/run_diagnostics_tests.sh
 run application-opk-plan sh system/application-core/tests/run_opk_plan_tests.sh
 run kernel-profile-config python3 kernel/current/tests/test_profile_config.py -q
+run kernel-rtc-resume python3 kernel/current/tests/test_rtc_resume.py
 run ui-core sh system/ui-core/tests/run_ui_core_tests.sh
 run boot-frame sh system/ui-core/tests/run_boot_tests.sh
 run r-poweroff sh system/ui-core/tests/run_power_tests.sh
@@ -54,6 +56,7 @@ run update-prepare sh system/rc33-system-update/tests/run_prepare_tests.sh
 run update-coordinator sh system/rc33-system-update/tests/run_coordinator_tests.sh
 run update-menu sh system/rc33-system-update/tests/test_menu_entry.sh
 run update-supervisor sh system/rc33-system-update/tests/test_ram_supervisor.sh
+run audit-fixes sh tools/gkd-test-audit-fixes
 run formal-source-closure python3 tools/gkd-source-closure.py
 
 printf '\nGKD_TEST_ALL total=%s failures=%s windows_only=1\n' "$total" "$failures"

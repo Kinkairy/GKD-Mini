@@ -4,16 +4,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <assert.h>
 #include <unistd.h>
+
+ssize_t fixture_recv(int,void *,size_t,int);
 
 #define GKD_CONTROLS_CONFIG_ROOT "/tmp/gkd-controls-config-fixture"
 #define socket fixture_socket
 #define connect fixture_connect
 #define send fixture_send
+#define recv fixture_recv
 #define main gkd_controls_runner_main
 #include "../source/gkd-controls.c"
 #undef main
 #undef send
+#undef recv
 #undef connect
 #undef socket
 
@@ -42,6 +47,7 @@ static unsigned int last_fade, last_ttl, last_sequence, yield_socket_calls, yiel
 static unsigned int config_read_calls;
 static int hardware_failure, send_failure, plane_busy, yield_connect_failure, yield_send_failure;
 static char yield_packet[32];
+static char queued_command;
 static const char *resume_text;
 
 int fixture_socket(int domain, int type, int protocol)
@@ -52,6 +58,13 @@ int fixture_socket(int domain, int type, int protocol)
         return -1;
     }
     return open("/dev/null", O_RDONLY | O_CLOEXEC);
+}
+ssize_t fixture_recv(int fd,void *buffer,size_t length,int flags)
+{
+    (void)fd;assert(flags==(MSG_DONTWAIT|MSG_TRUNC)&&length==1);
+    if(!queued_command){errno=EAGAIN;return -1;}
+    *(char *)buffer=queued_command;queued_command=0;
+    return 1;
 }
 int fixture_connect(int fd, const struct sockaddr *address, socklen_t length)
 {
@@ -272,6 +285,16 @@ static int effect_paths(void)
 		!controller.pending && !controller.yield_sent && yield_socket_calls == 0U);
 	return 0;
 }
+static int forwarded_brightness_contract(void)
+{
+    struct controller controller;struct gkd_controls_state state;
+    CHECK(initialize(&controller,&state)==0);
+    hardware_calls=0;hardware_failure=0;queued_command='X';
+    CHECK(command_drain(&controller,8)==0&&hardware_calls==0);
+    queued_command='B';
+    CHECK(command_drain(&controller,8)==0&&hardware_calls==1);
+    return 0;
+}
 
 static int install_generation(char digit, const char *text);
 static void remove_generations(void);
@@ -471,7 +494,7 @@ static int dynamic_effects_contract(void)
 }
 int main(void)
 {
-	if (drain_paths() || effect_paths() || pending_osd_contract() || resume_counter_contract() || menu_input_boundary() ||
+	if (drain_paths() || effect_paths() || forwarded_brightness_contract() || pending_osd_contract() || resume_counter_contract() || menu_input_boundary() ||
 	    persistence_contract() || dynamic_effects_contract()) return 1;
 	puts("GKD_CONTROLS_RUNNER=PASS dynamic-effects=next-entry cache=inode idle-polls=0 invalid=reject unmanaged=preserved");
 	return 0;

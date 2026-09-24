@@ -89,15 +89,6 @@ static void fail_action(struct fixture *fixture,
         GKD_LIFECYCLE_ACTION_NONE);
 }
 
-static void probe_action(struct fixture *fixture,
-    enum gkd_app_lifecycle_media_state state)
-{
-    uint64_t token =
-        pending(fixture, GKD_LIFECYCLE_ACTION_GAME_PROBE)->token;
-    assert(!gkd_app_lifecycle_probe_complete(
-        &fixture->lifecycle, token, state));
-}
-
 static void open_menu(struct fixture *fixture)
 {
     assert(!gkd_app_lifecycle_event(&fixture->lifecycle,
@@ -114,15 +105,16 @@ static void test_storage_roundtrip(void)
     static const enum gkd_app_lifecycle_action order[] = {
         GKD_LIFECYCLE_ACTION_MENU_ACQUIRE,
         GKD_LIFECYCLE_ACTION_MENU_RELEASE,
-        GKD_LIFECYCLE_ACTION_APP_PAUSE,
-        GKD_LIFECYCLE_ACTION_GAME_UNMOUNT,
+        GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK,
+        GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE,
+        GKD_LIFECYCLE_ACTION_APP_STOP,
         GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME,
         GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN,
         GKD_LIFECYCLE_ACTION_USB_FLUSH,
-        GKD_LIFECYCLE_ACTION_GAME_MOUNT,
-        GKD_LIFECYCLE_ACTION_APP_RESUME
+        GKD_LIFECYCLE_ACTION_APP_START,
+        GKD_LIFECYCLE_ACTION_DISPLAY_THAW
     };
-    unsigned i;
+    uint64_t next;
 
     setup(&f, 7U);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
@@ -132,27 +124,31 @@ static void test_storage_roundtrip(void)
     assert(gkd_app_lifecycle_complete(&f.lifecycle,
         f.lifecycle.pending_token + 1U) < 0 && errno == ESTALE);
     complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_ACQUIRE);
-    assert(gkd_app_lifecycle_event(&f.lifecycle,
-        GKD_LIFECYCLE_EVENT_MENU, 0) < 0 && errno == EALREADY);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_STORAGE, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_RELEASE);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_PAUSE);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_STOP);
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME);
     assert(f.lifecycle.state == GKD_LIFECYCLE_STORAGE);
+    assert(!f.lifecycle.app_running && f.lifecycle.display_frozen);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_RETURN, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_MOUNT);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_RESUME);
+    next = pending(&f, GKD_LIFECYCLE_ACTION_APP_START)->generation;
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_START);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_WAIT_APP_READY);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_APP_READY, next));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
     assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE);
     assert(f.lifecycle.usb == GKD_LIFECYCLE_USB_NONE);
-    assert(f.lifecycle.game_media == GKD_LIFECYCLE_MEDIA_MOUNTED);
-    assert(!f.lifecycle.app_paused);
+    assert(f.lifecycle.app_running && f.lifecycle.app_ready);
+    assert(!f.lifecycle.display_frozen);
     assert(f.count == sizeof(order) / sizeof(order[0]));
-    for (i = 0; i < f.count; i++)
+    for (unsigned i = 0; i < f.count; i++)
         assert(f.requests[i].action == order[i]);
 }
 
@@ -203,66 +199,68 @@ static void test_detach_inflight(void)
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_STORAGE, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_RELEASE);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_PAUSE);
-    pending(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK);
+    pending(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_DETACH, 0));
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT);
-    pending(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_MOUNT);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_RESUME);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
     assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE);
     for (unsigned i = 0; i < f.count; i++)
-        assert(f.requests[i].action !=
-            GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME);
+        assert(f.requests[i].action != GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME &&
+               f.requests[i].action != GKD_LIFECYCLE_ACTION_APP_STOP);
 }
 
 static void test_media_failure_recovery(void)
 {
     struct fixture f;
     unsigned before;
-    uint64_t stale;
+    uint64_t next;
 
     setup(&f, 3U);
     open_menu(&f);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_STORAGE, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_RELEASE);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_PAUSE);
-    stale = pending(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT)->token;
-    fail_action(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT, EIO);
-    assert(f.lifecycle.game_media == GKD_LIFECYCLE_MEDIA_UNKNOWN);
+    fail_action(&f, GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK, EBUSY);
     before = f.count;
-    assert(gkd_app_lifecycle_complete(&f.lifecycle, stale) < 0 &&
-        errno == ESTALE);
-    assert(f.count == before);
-    assert(!gkd_app_lifecycle_event(&f.lifecycle,
-        GKD_LIFECYCLE_EVENT_RETRY, 0));
-    fail_action(&f, GKD_LIFECYCLE_ACTION_GAME_PROBE, EIO);
-    assert(f.count == before + 1U);
-    assert(!gkd_app_lifecycle_event(&f.lifecycle,
-        GKD_LIFECYCLE_EVENT_RETRY, 0));
-    probe_action(&f, GKD_LIFECYCLE_MEDIA_UNMOUNTED);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME);
-    assert(f.lifecycle.state == GKD_LIFECYCLE_STORAGE);
-
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_RETURN, 0));
-    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_MOUNT);
-    fail_action(&f, GKD_LIFECYCLE_ACTION_APP_RESUME, EIO);
-    before = f.count;
-    assert(gkd_app_lifecycle_event(&f.lifecycle,
-        GKD_LIFECYCLE_EVENT_MENU, 0) < 0 && errno == EBUSY);
-    assert(f.count == before);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_RETRY, 0));
-    assert(f.count == before + 1U);
-    pending(&f, GKD_LIFECYCLE_ACTION_APP_RESUME);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_RESUME);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE);
+    assert(f.lifecycle.app_running && f.lifecycle.app_ready);
+    for (unsigned i = 0; i < f.count; i++)
+        assert(f.requests[i].action != GKD_LIFECYCLE_ACTION_APP_STOP &&
+               f.requests[i].action != GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME);
+    assert(f.count == before + 2U);
+
+    setup(&f, 4U);
+    open_menu(&f);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_STORAGE, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_STOP);
+    fail_action(&f, GKD_LIFECYCLE_ACTION_USB_EXPORT_GAME, EIO);
+    assert(f.lifecycle.usb == GKD_LIFECYCLE_USB_UNKNOWN);
+    assert(!f.lifecycle.app_running);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_RETURN, 0));
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_RETRY, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
+    next = pending(&f, GKD_LIFECYCLE_ACTION_APP_START)->generation;
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_START);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_APP_READY, next));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
     assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE);
 }
 
@@ -276,22 +274,19 @@ static void test_exit_during_storage_operation(void)
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_STORAGE, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_MENU_RELEASE);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_PAUSE);
-    token = pending(&f, GKD_LIFECYCLE_ACTION_GAME_UNMOUNT)->token;
+    token = pending(&f, GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK)->token;
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_APP_EXIT, 10U));
     assert(f.lifecycle.pending_action ==
-        GKD_LIFECYCLE_ACTION_GAME_UNMOUNT);
+        GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK);
     assert(f.lifecycle.pending_token == token);
     assert(!gkd_app_lifecycle_complete(&f.lifecycle, token));
     assert(f.lifecycle.state == GKD_LIFECYCLE_RECOVERY);
-    assert(f.lifecycle.pending_action ==
-        GKD_LIFECYCLE_ACTION_NONE);
+    assert(f.lifecycle.pending_action == GKD_LIFECYCLE_ACTION_NONE);
     assert(!gkd_app_lifecycle_event(&f.lifecycle,
         GKD_LIFECYCLE_EVENT_RETRY, 0));
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_CLEAR_LUN);
     complete_action(&f, GKD_LIFECYCLE_ACTION_USB_FLUSH);
-    complete_action(&f, GKD_LIFECYCLE_ACTION_GAME_MOUNT);
     next = pending(&f, GKD_LIFECYCLE_ACTION_APP_START)->generation;
     complete_action(&f, GKD_LIFECYCLE_ACTION_APP_START);
     assert(f.lifecycle.state == GKD_LIFECYCLE_WAIT_APP_READY);
@@ -551,6 +546,66 @@ static void test_card_refresh(void)
  puts("GKD_CARD_REFRESH=PASS stop-before-release/new-ready-generation/failure-retry/export-blocked/stale-media-recovery");
 }
 
+static void test_card_removed_without_frontend(void)
+{
+    struct fixture f;
+    setup(&f, 90U);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_CARD_REMOVED, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_STOP);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_LOOPS_RELEASE);
+    assert(f.lifecycle.pending_action == GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE &&
+        !f.lifecycle.app_running && !f.lifecycle.card_present);
+
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_CARD_REFRESH, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    assert(f.lifecycle.pending_action == GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_LOOPS_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_START);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_WAIT_APP_READY);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_APP_READY, f.lifecycle.generation));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE &&
+        f.lifecycle.app_ready && f.lifecycle.card_present);
+
+    memset(&f, 0, sizeof(f));
+    assert(!gkd_app_lifecycle_init_no_app(&f.lifecycle, begin_action, &f));
+    assert(!f.lifecycle.app_running && !f.lifecycle.card_present);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_CARD_REFRESH, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    assert(f.lifecycle.pending_action == GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_LOOPS_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_APP_START);
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_APP_READY, f.lifecycle.generation));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE && f.lifecycle.app_ready);
+
+    setup(&f, 100U);
+    f.lifecycle.state = GKD_LIFECYCLE_RECOVERY;
+    f.lifecycle.failed_action = GKD_LIFECYCLE_ACTION_APP_START;
+    f.lifecycle.app_running = 0U;
+    f.lifecycle.app_ready = 0U;
+    assert(!gkd_app_lifecycle_event(&f.lifecycle,
+        GKD_LIFECYCLE_EVENT_CARD_REMOVED, 0));
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
+    assert(f.lifecycle.pending_action == GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_P2_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_LOOPS_RELEASE);
+    complete_action(&f, GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
+    assert(f.lifecycle.state == GKD_LIFECYCLE_ACTIVE &&
+        !f.lifecycle.app_running && !f.lifecycle.card_present);
+}
+
 static void test_wait_kinds(void)
 {
  struct fixture f;
@@ -596,18 +651,16 @@ static void test_usb_transition_visibility(void)
    assert(gkd_app_lifecycle_usb_transition(&f.lifecycle));
    complete_action(&f,f.lifecycle.pending_action);
   }
-  if(mode){
-   assert(f.lifecycle.waiting_ready&&gkd_app_lifecycle_usb_transition(&f.lifecycle));
-   assert(!gkd_app_lifecycle_event(&f.lifecycle,GKD_LIFECYCLE_EVENT_APP_READY,f.lifecycle.requested_generation));
-   complete_action(&f,GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
-  }
+  assert(f.lifecycle.waiting_ready&&gkd_app_lifecycle_usb_transition(&f.lifecycle));
+  assert(!gkd_app_lifecycle_event(&f.lifecycle,GKD_LIFECYCLE_EVENT_APP_READY,f.lifecycle.requested_generation));
+  complete_action(&f,GKD_LIFECYCLE_ACTION_DISPLAY_THAW);
   assert(f.lifecycle.state==GKD_LIFECYCLE_ACTIVE&&!gkd_app_lifecycle_usb_transition(&f.lifecycle));
  }
  setup(&f,1);assert(!gkd_app_lifecycle_event(&f.lifecycle,GKD_LIFECYCLE_EVENT_MENU,0));
  complete_action(&f,GKD_LIFECYCLE_ACTION_MENU_ACQUIRE);
  assert(!gkd_app_lifecycle_event(&f.lifecycle,GKD_LIFECYCLE_EVENT_STORAGE,0));
  complete_action(&f,GKD_LIFECYCLE_ACTION_MENU_RELEASE);
- fail_action(&f,GKD_LIFECYCLE_ACTION_APP_PAUSE,EIO);
+ fail_action(&f,GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK,EBUSY);
  assert(!gkd_app_lifecycle_usb_transition(&f.lifecycle));
 }
 
@@ -616,6 +669,7 @@ int main(void)
     test_wait_kinds();
     test_usb_transition_visibility();
     test_card_refresh();
+    test_card_removed_without_frontend();
     test_storage_roundtrip();
     test_cancel_and_charge();
     test_cancel_during_menu_open();

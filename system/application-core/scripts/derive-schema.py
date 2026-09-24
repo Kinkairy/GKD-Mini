@@ -54,5 +54,39 @@ for row in catalog.read_text().splitlines():
         limit = (3 if language == "zh" else 7) if key in ("yes", "no") else (9 if language == "zh" and not body else 20)
         alphabet = glyphs if language == "zh" and not body else "ASCII"
         lines.append(f"app_text_{key}_{language}|ui_text|{json.loads(value)}|1|{limit}|{alphabet}|ui-text|next-entry\n")
+# Compile the same A contract that the runtime C reader includes. Do not
+# expand R's hotkey/path policy or silently accept values A cannot load.
+contract = (Path(__file__).resolve().parents[1] / "include/gkd-app-settings-contract.def").read_text()
+paths = re.findall(r'^GKD_SCREENSHOT_PATH\("([^"\n]+)", ([0-9]+)\)$', contract, re.M)
+hotkeys = re.findall(r'^GKD_SCREENSHOT_HOTKEY\("([^"\n]+)", ([0-9]+), ([0-9]+)\)$', contract, re.M)
+if len(paths) != 1 or not hotkeys or len({x[0] for x in hotkeys}) != len(hotkeys):
+    raise SystemExit("GKD_APP_SCHEMA=BLOCKED settings-contract")
+path_root, path_bytes = paths[0]
+if not path_root.startswith("/") or not path_root.endswith("/") or int(path_bytes) < len(path_root)+2:
+    raise SystemExit("GKD_APP_SCHEMA=BLOCKED path-contract")
+runtime = (Path(__file__).resolve().parents[1] / "source/gkd-app-settings.c").read_text()
+unique_keys = re.findall(r'T\("([a-z_]+)",KEY_FIELD,', runtime)
+if not unique_keys or len(set(unique_keys)) != len(unique_keys):
+    raise SystemExit("GKD_APP_SCHEMA=BLOCKED key-contract")
+changed = set()
+for index, line in enumerate(lines):
+    parts = line.rstrip("\n").split("|")
+    if len(parts) != 8:
+        continue
+    key = parts[0]
+    if key == "screenshot_hotkey":
+        parts[1], parts[5] = "enum", ",".join(row[0] for row in hotkeys)
+        if parts[2] not in {row[0] for row in hotkeys}:
+            raise SystemExit("GKD_APP_SCHEMA=BLOCKED hotkey-default")
+    elif key == "screenshot_output_dir":
+        parts[1], parts[4], parts[5] = "safe_subdir", str(int(path_bytes)-1), path_root
+    elif key in unique_keys:
+        parts[1] = "unique_keycode"
+    else:
+        continue
+    changed.add(key)
+    lines[index] = "|".join(parts)+"\n"
+if changed != set(unique_keys) | {"screenshot_hotkey", "screenshot_output_dir"}:
+    raise SystemExit("GKD_APP_SCHEMA=BLOCKED settings-schema-coverage")
 output.write_text("".join(line for line in lines if line.split("|", 1)[0] not in removed))
 print("GKD_APP_SCHEMA=PASS")

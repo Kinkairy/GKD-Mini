@@ -11,7 +11,7 @@ struct gkd_app_settings {
     unsigned screenshot_pair[2], screenshot_notify_ms, battery_notify_ms;
     char screenshot_directory[256];
     char keys[8][24];
-    char menu_key[24], left_key[24], right_key[24];
+    char menu_key[24], brightness_key[24], left_key[24], right_key[24];
 };
 /* One atomic compiled config snapshot; no defaults or alternate config path. */
 int gkd_app_settings_load(const char *,struct gkd_app_settings *);

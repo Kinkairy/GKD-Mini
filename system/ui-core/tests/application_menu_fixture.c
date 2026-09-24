@@ -15,21 +15,32 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 int gkd_application_menu_main(int,char **);
 struct scripted {unsigned time,source;unsigned short type,code;int value;};
 static struct scripted script[32];static unsigned count,cursor,clock_ms,held_initial,submits,hides,clears,owners,closed,hide_time,last_selected,fail_submit,fail_hide,fail_poll,signal_time,backward;
-static unsigned loading_draws,loading_frame;
+static unsigned loading_draws,loading_frame,brightness_requests;
 static unsigned require_choice,update_menu;
 static const char *expected_from="3.5",*expected_to="3.6";
 static unsigned setting_saves,setting_polls,setting_failure,setting_last_sleep,setting_last_fps,setting_style,drawn_style;
-static void reset(void) {loading_draws=loading_frame=0;update_menu=0;require_choice=0;setting_style=drawn_style=0;setting_saves=setting_polls=setting_failure=setting_last_sleep=setting_last_fps=0;count=cursor=clock_ms=held_initial=submits=hides=clears=owners=closed=hide_time=last_selected=fail_submit=fail_hide=fail_poll=signal_time=backward=0;}
+static void reset(void) {loading_draws=loading_frame=brightness_requests=0;update_menu=0;require_choice=0;setting_style=drawn_style=0;setting_saves=setting_polls=setting_failure=setting_last_sleep=setting_last_fps=0;count=cursor=clock_ms=held_initial=submits=hides=clears=owners=closed=hide_time=last_selected=fail_submit=fail_hide=fail_poll=signal_time=backward=0;}
 static void add(unsigned t,unsigned source,unsigned short type,unsigned short code,int value) {script[count++]=(struct scripted){t,source,type,code,value};}
 int __wrap_clock_gettime(clockid_t id,struct timespec *t) {(void)id;t->tv_sec=0;t->tv_nsec=(long)(backward&&clock_ms>=100?1:clock_ms)*1000000L;return 0;}
 int __wrap_open(const char *p,int flags,...) {(void)flags;if(!strcmp(p,"/run/gkd-config/current/effective.conf")){errno=ENOENT;return -1;}assert(!strcmp(p,"/dev/fb0"));return 99;}
 int __wrap_fstat(int fd,struct stat *s) {assert(fd==99);memset(s,0,sizeof(*s));s->st_mode=S_IFCHR;return 0;}
-int __wrap_close(int fd) {assert(fd==99);return 0;}
+int __wrap_close(int fd) {assert(fd==99||fd==88);return 0;}
+int __wrap_socket(int domain,int type,int protocol)
+{assert(domain==AF_UNIX&&type==(SOCK_DGRAM|SOCK_CLOEXEC|SOCK_NONBLOCK)&&!protocol);return 88;}
+ssize_t __wrap_sendto(int fd,const void *buffer,size_t length,int flags,const struct sockaddr *target,socklen_t target_length)
+{
+ const struct sockaddr_un *address=(const struct sockaddr_un *)target;
+ assert(fd==88&&length==1&&*(const char *)buffer=='B'&&flags==MSG_NOSIGNAL&&target_length==sizeof(*address));
+ assert(address->sun_family==AF_UNIX&&!strcmp(address->sun_path,"/run/gkd-controls-command.sock"));
+ ++brightness_requests;return 1;
+}
 int __wrap_poll(struct pollfd *p,nfds_t n,int delay)
 {
  assert(n==2 && delay>=0 && delay<=20);clock_ms+=(unsigned)delay;
@@ -140,6 +151,10 @@ static void setting_edits(void)
 }
 int main(void)
 {
+ reset();add(20,1,EV_KEY,KEY_END,1);add(30,0,EV_KEY,KEY_END,1);
+ add(40,1,EV_KEY,KEY_END,0);add(50,0,EV_KEY,KEY_END,0);
+ add(80,0,EV_KEY,KEY_LEFTALT,1);add(100,0,EV_KEY,KEY_LEFTALT,0);
+ assert(!run("enabled")&&brightness_requests==1&&last_selected==0);
  reset();add(20,0,EV_KEY,KEY_DOWN,1);add(20,0,EV_KEY,KEY_DOWN,0);add(80,0,EV_KEY,KEY_LEFTCTRL,1);add(100,0,EV_KEY,KEY_LEFTCTRL,0);
  assert(!run("enabled"));assert(last_selected==1 && hides==1 && clears==1 && closed==1 && clock_ms>=hide_time+240);
  reset();held_initial=1;add(20,0,EV_KEY,KEY_LEFTCTRL,2);add(40,0,EV_KEY,KEY_LEFTCTRL,0);add(80,0,EV_KEY,KEY_LEFTALT,1);add(100,0,EV_KEY,KEY_LEFTALT,0);

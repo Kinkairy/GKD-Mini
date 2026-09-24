@@ -15,11 +15,13 @@ PATTERNS = (
 
 def selected(path: Path, root: Path) -> bool:
     relative = path.relative_to(root)
-    if any(part in {".git", "__pycache__", "docs"} for part in relative.parts):
+    if any(part in {".git", "__pycache__", "docs", "tests"} for part in relative.parts):
         return False
     if path.suffix.lower() in {".md", ".txt"}:
         return False
-    if relative.parts[0] in {"build", "kernel"}:
+    if relative.as_posix() == "tools/gkd-source-closure.py":
+        return False  # This file defines the forbidden-pattern vocabulary.
+    if relative.parts[0] in {"build", "kernel", "tools"}:
         return True
     if relative.parts[0] != "system":
         return False

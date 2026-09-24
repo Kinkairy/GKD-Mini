@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "gkd-app-storage.h"
 #ifndef GKD_APP_LAUNCH_OWNER
 #define GKD_APP_LAUNCH_OWNER "/var/run/gkd-app/loop-owner"
 #endif
@@ -106,7 +107,13 @@ int main(int argc,char **argv)
     struct gkd_app_fps_launch fps=GKD_APP_FPS_LAUNCH_INIT;
     struct gkd_app_menu_launch menu=GKD_APP_MENU_LAUNCH_INIT;
     int image=-1,error=0,reaped=0,mounted=0,made=0,rc=125;
-    image=open(argv[optind],O_RDONLY|O_CLOEXEC);
+    char game_image[4096];
+    const char *image_arg=argv[optind];
+    if(!strncmp(image_arg,"/media/data/apps/",17)){
+        if(strchr(image_arg+17,'/')||snprintf(game_image,sizeof(game_image),"/media/sdcard/apps/%s",image_arg+17)>=(int)sizeof(game_image)){error=EINVAL;goto done;}
+        image_arg=game_image;
+    }
+    image=open(image_arg,O_RDONLY|O_CLOEXEC);
     if(image<0||fstat(image,&st)||!S_ISREG(st.st_mode)){error=errno?errno:EINVAL;goto done;}
     char image_path[64];snprintf(image_path,sizeof(image_path),"/proc/self/fd/%d",image);
     if(gkd_opk_plan_open(image_path,metadata,argc-optind-1,argv+optind+1,&plan)){error=errno;goto done;}
@@ -120,6 +127,7 @@ int main(int argc,char **argv)
     if(stopping){error=ECANCELED;goto done;}
     if(gkd_app_loop_owned_count(owner)!=1){error=EBUSY;goto done;}
     if(unshare(CLONE_NEWNS)||mount(NULL,"/",NULL,MS_REC|MS_PRIVATE,NULL)){error=errno;goto done;}
+    if(gkd_storage_game()){error=errno;goto done;}
     if(mkdir(target,0700)){error=errno;goto done;}made=1;
     if(gkd_app_loop_mount_owned(image,target,owner,&lease)){error=errno;goto done;}mounted=1;
     close(image);image=-1;

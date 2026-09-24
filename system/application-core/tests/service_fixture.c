@@ -555,9 +555,14 @@ static void card_monitor_tests(void)
  assert(s.card_generation==10&&!s.card_refreshing);
  game_card_poll(&s,1400);assert(s.card_refreshing&&!s.card_generation&&s.request.action==GKD_LIFECYCLE_ACTION_DISPLAY_FREEZE);
  unsigned old_stops=stops,old_starts=starts;
+ reach(&s,GKD_LIFECYCLE_ACTIVE);
+ assert(stops==old_stops+1&&starts==old_starts&&!s.card_refreshing&&
+        !s.lifecycle.app_running&&!s.lifecycle.card_present&&s.status_kind==6U);
+ write_file(APP_GAME_DISKSEQ,"13\n",0600);game_card_poll(&s,1600);game_card_poll(&s,1800);
+ assert(s.card_refreshing&&s.card_generation==13);
  reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
  s.session.state=GKD_SESSION_READY;reach(&s,GKD_LIFECYCLE_ACTIVE);
- assert(stops==old_stops+1&&starts==old_starts+1&&!s.card_refreshing&&s.lifecycle.generation==2);
+ assert(starts==old_starts+1&&s.lifecycle.app_ready&&s.lifecycle.card_present);
  gkd_app_events_close(&s.events);
 
  init(&s);write_file(APP_GAME_DISKSEQ,"11\n",0600);game_card_poll(&s,1000);
@@ -595,21 +600,24 @@ static void card_page_tests(void)
  session(&s);assert(!s.notice_controls_pending&&s.events.exclusive&&s.events.observer.menu_guard.lease_fd>=0);
  s.charge_until=0;reach(&s,GKD_LIFECYCLE_ACTIVE);
  assert(!s.card_refreshing&&!s.status_kind&&!s.events.exclusive);
- /* No-card cold boot owns its first visible page before the frontend is ready. */
+ /* No-card cold boot owns the page without starting the card-dependent frontend. */
  init(&s);s.boot_ready=0;s.events_live=0;s.card_initialized=1;
  assert(!status_screen(&s,6000)&&s.status_kind==6U&&s.events.exclusive);
- assert(!notice_start_prepare(&s)&&s.events.exclusive&&s.notice_controls_pending);
+ assert(!start_without_frontend(&s));
+ assert(s.boot_ready&&s.events.exclusive&&!s.terminal_error&&
+        !s.lifecycle.app_running&&!s.lifecycle.card_present);
  struct gkd_menu_guard_controls startup;uint64_t epoch;gkd_menu_guard_controls_init(&startup);
- assert(!gkd_menu_guard_controls_acquire(&startup,&epoch));
- session(&s);assert(!s.boot_ready&&s.notice_controls_pending&&!s.terminal_error);
- gkd_menu_guard_controls_release(&startup);
- session(&s);assert(s.boot_ready&&s.events.exclusive&&!s.terminal_error&&!s.notice_controls_pending);
  assert(gkd_menu_guard_controls_acquire(&startup,&epoch)==1);
  /* Explicit menu entry can release the page; A/B on the page have no handler. */
  s.charge_until=0;unsigned old_closes=event_closes;
  write_file(APP_MENU,"#!/bin/sh\nprintf 'GKD_MENU_READY kind=POWER\\n'\nsleep 0.02\nprintf 'GKD_MENU_RESULT=CANCELLED kind=POWER\\n'\n",0700);
  assert(!dispatch_command(&s,"power-menu"));
  reach(&s,GKD_LIFECYCLE_ACTIVE);assert(event_closes>old_closes&&!s.terminal_error);
+ /* No frontend means no application namespace for optional ICS jobs. A stale
+  * desire must never reopen the stopped init process after card removal. */
+ assert(!s.lifecycle.app_running&&!s.network_desired);
+ s.network_desired=1;network_poll(&s,now_ms()+3000U);
+ assert(!s.network_running&&!s.network_dirty&&s.network_etc==-1);
  gkd_app_events_close(&s.events);
  /* The disabled page must not disable the existing inactivity timer. */
  init(&s);gkd_app_events_init(&s.events);int pipes[3][2];
@@ -636,7 +644,7 @@ static void card_page_tests(void)
 }
 static void usb_loading_tests(void)
 {
- write_file(APP_USB,"#!/bin/sh\n[ \"${GKD_USB_FAIL-0}\" != 1 ] || exit 1\nprintf 'USB=PASS mode=%s\\n' \"$1\"\n",0700);
+ write_file(APP_USB,"#!/bin/sh\nif [ \"$1\" = save ]; then\n [ \"$2\" = 3 ] && [ \"${#3}\" = 64 ] || exit 2\n sleep 0.05\n if [ \"${GKD_CONFIG_UNKNOWN-0}\" = 1 ]; then printf 'GKD_APP_SETTINGS=FAILED state=unknown errno=5\\n'; exit 1; fi\n if [ \"${GKD_USB_FAIL-0}\" = 1 ]; then printf 'GKD_APP_SETTINGS=FAILED state=recoverable errno=5\\n'; exit 1; fi\n printf 'GKD_APP_SETTINGS=SAVED generation=%s\\n' \"$3\"; exit 0\nfi\n[ \"${GKD_USB_FAIL-0}\" != 1 ] || exit 1\nprintf 'USB=PASS mode=%s\\n' \"$1\"\n",0700);
  struct service s;
  real_card_lease=1;
  write_file(APP_MENU,"#!/bin/sh\nprintf 'GKD_MENU_READY kind=USB\\n'\nsleep 0.01\nprintf 'GKD_MENU_RESULT=SELECTED kind=USB index=%s\\n' \"$GKD_MENU_CHOICE\"\n",0700);
@@ -651,20 +659,18 @@ static void usb_loading_tests(void)
   assert(s.status_kind==mode&&!s.card_refreshing&&!s.terminal_error);
   pages=loading_draws;
   assert(!dispatch_command(&s,"return"));
-  if(mode==2){
-   reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
-   assert(s.status_kind==8U&&s.notice_controls_pending&&s.events.exclusive);
-   assert(s.events.observer.menu_guard.lease_fd==-1);
-   unsigned sends=status_sends;
-   assert(!status_screen(&s,s.status_renew)&&status_sends==sends+1);
-   struct gkd_menu_guard_controls controls;uint64_t epoch;
-   gkd_menu_guard_controls_init(&controls);
-   assert(!gkd_menu_guard_controls_acquire(&controls,&epoch));
-   s.session.state=GKD_SESSION_READY;session(&s);
-   assert(s.notice_controls_pending&&!s.terminal_error);
-   gkd_menu_guard_controls_release(&controls);session(&s);
-   assert(!s.notice_controls_pending&&s.events.exclusive&&s.events.observer.menu_guard.lease_fd>=0);
-  }
+  reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
+  assert(s.status_kind==8U&&s.notice_controls_pending&&s.events.exclusive);
+  assert(s.events.observer.menu_guard.lease_fd==-1);
+  unsigned sends=status_sends;
+  assert(!status_screen(&s,s.status_renew)&&status_sends==sends+1);
+  struct gkd_menu_guard_controls controls;uint64_t epoch;
+  gkd_menu_guard_controls_init(&controls);
+  assert(!gkd_menu_guard_controls_acquire(&controls,&epoch));
+  s.session.state=GKD_SESSION_READY;session(&s);
+  assert(s.notice_controls_pending&&!s.terminal_error);
+  gkd_menu_guard_controls_release(&controls);session(&s);
+  assert(!s.notice_controls_pending&&s.events.exclusive&&s.events.observer.menu_guard.lease_fd>=0);
   reach(&s,GKD_LIFECYCLE_ACTIVE);
   assert(loading_draws>pages);
   assert(!s.status_kind&&!s.events.exclusive&&!s.notice_controls_pending&&!s.terminal_error);
@@ -766,20 +772,38 @@ int main(void)
  struct service s;
  assert(!gkd_ui_font_load(&test_font,"/out/fallback.psf"));
  write_file(APP_MENU,"#!/bin/sh\nsleep \"${GKD_MENU_READY_DELAY-0}\"\nprintf 'GKD_MENU_READY kind=%s\\n' \"$2\"\ntrap 'printf \"GKD_MENU_RESULT=CANCELLED kind=%s\\n\" \"$2\"; exit 0' TERM\nsleep \"${GKD_MENU_RESULT_DELAY-0.01}\"\nprintf 'GKD_MENU_RESULT=SELECTED kind=%s index=%s\\n' \"$2\" \"$GKD_MENU_CHOICE\"\n",0700);
- write_file(APP_USB,"#!/bin/sh\n[ \"${GKD_USB_FAIL-0}\" != 1 ] || exit 1\nprintf 'USB=PASS mode=%s\\n' \"$1\"\n",0700);
+ write_file(APP_USB,"#!/bin/sh\nif [ \"$1\" = save ]; then\n [ \"$2\" = 3 ] && [ \"${#3}\" = 64 ] || exit 2\n sleep 0.05\n if [ \"${GKD_CONFIG_UNKNOWN-0}\" = 1 ]; then printf 'GKD_APP_SETTINGS=FAILED state=unknown errno=5\\n'; exit 1; fi\n if [ \"${GKD_USB_FAIL-0}\" = 1 ]; then printf 'GKD_APP_SETTINGS=FAILED state=recoverable errno=5\\n'; exit 1; fi\n printf 'GKD_APP_SETTINGS=SAVED generation=%s\\n' \"$3\"; exit 0\nfi\n[ \"${GKD_USB_FAIL-0}\" != 1 ] || exit 1\nprintf 'USB=PASS mode=%s\\n' \"$1\"\n",0700);
  write_file(APP_LUN,"\n",0600);
  init(&s);assert(!setenv("GKD_MENU_CHOICE","1",1));assert(!dispatch_command(&s,"usb-menu"));
- reach(&s,GKD_LIFECYCLE_STORAGE);assert(!status_screen(&s,now_ms()));assert(!status_draws&&status_sends>0&&osd_sends==1&&osd_icon==6U&&!strcmp(osd_text,"STORAGE"));assert(pauses==1&&unmounts==1&&!resumes);
- assert(s.session.ready.application==903&&s.media.paused&&!s.media.mounted);
- assert(!dispatch_command(&s,"return"));reach(&s,GKD_LIFECYCLE_ACTIVE);
- assert(status_hides==0&&status_clears>0&&!s.status_kind&&status_transition==0U);
- assert(mounts==1&&resumes==1&&s.session.ready.application==903);
- assert(!setenv("GKD_MENU_CHOICE","2",1));assert(!dispatch_command(&s,"usb-menu"));
- reach(&s,GKD_LIFECYCLE_DEBUG);assert(stops==1&&cleaned==1&&freezes==1&&!starts&&!thaws);
+ reach(&s,GKD_LIFECYCLE_STORAGE);assert(!status_screen(&s,now_ms()));assert(!status_draws&&status_sends>0&&osd_sends==1&&osd_icon==6U&&!strcmp(osd_text,"STORAGE"));
+ assert(stops==1&&cleaned==1&&freezes==1&&!pauses&&!unmounts);
+ assert(s.session.pid<0&&!s.media.paused);
  assert(!dispatch_command(&s,"return"));reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
- assert(starts==1&&validated==1&&!thaws&&s.session_generation==2);
- s.session.state=GKD_SESSION_READY;reach(&s,GKD_LIFECYCLE_ACTIVE);assert(thaws==1);
+ assert(starts==1&&!thaws&&s.session_generation==2);
+ s.session.state=GKD_SESSION_READY;reach(&s,GKD_LIFECYCLE_ACTIVE);
+ assert(status_hides==0&&status_clears>0&&!s.status_kind&&status_transition==0U&&thaws==1);
+ assert(!setenv("GKD_MENU_CHOICE","2",1));assert(!dispatch_command(&s,"usb-menu"));
+ reach(&s,GKD_LIFECYCLE_DEBUG);assert(stops==2&&cleaned==2&&freezes==2&&starts==1&&thaws==1);
+ assert(!dispatch_command(&s,"return"));reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
+ assert(starts==2&&validated==1&&thaws==1&&s.session_generation==3);
+ s.session.state=GKD_SESSION_READY;reach(&s,GKD_LIFECYCLE_ACTIVE);assert(thaws==2);
  assert(dispatch_command(&s,"arbitrary-shell")<0&&errno==EINVAL);
+ /* A running game holds the launcher lock: storage must fail before the
+  * display freezes or the frontend stops, then return to the same app. */
+ struct service busy_storage;init(&busy_storage);
+ unsigned stops_before_busy=stops,freezes_before_busy=freezes;
+ idle_result=GKD_APP_IDLE_BUSY;assert(!setenv("GKD_MENU_CHOICE","1",1));
+ assert(!dispatch_command(&busy_storage,"usb-menu"));
+ reach(&busy_storage,GKD_LIFECYCLE_RECOVERY);
+ assert(busy_storage.lifecycle.failed_action==GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK);
+ assert(stops==stops_before_busy&&freezes==freezes_before_busy&&busy_storage.lifecycle.app_running);
+ assert(busy_storage.storage_busy_recover_at&&
+        busy_storage.storage_busy_recover_at!=UINT64_MAX);
+ storage_busy_recover(&busy_storage,busy_storage.storage_busy_recover_at);
+ reach(&busy_storage,GKD_LIFECYCLE_ACTIVE);
+ assert(!busy_storage.storage_busy_recover_at);
+ assert(stops==stops_before_busy&&busy_storage.lifecycle.app_running);
+ idle_result=GKD_APP_IDLE_ACQUIRED;
  /* A failed recovery-screen transfer keeps the POWER_QUIESCE guard; a
   * completed transfer releases it exactly once when ACTIVE resumes. */
  struct service recovery;init(&recovery);
@@ -901,11 +925,12 @@ int main(void)
  assert(s.stopped_host==901&&stops==before_stop+1&&cleaned==before_clean+1&&!s.terminal_error);
  init(&s);assert(!setenv("GKD_MENU_CHOICE","1",1));assert(!setenv("GKD_USB_FAIL","1",1));
  assert(!dispatch_command(&s,"usb-menu"));reach(&s,GKD_LIFECYCLE_RECOVERY);
- assert(s.media.paused&&!s.media.mounted&&s.lifecycle.last_error);
+ assert(!s.media.paused&&!s.lifecycle.app_running&&s.lifecycle.last_error);
  assert(!unsetenv("GKD_USB_FAIL"));
+ unsigned freezes_before=freezes,thaws_before=thaws;
  init(&s);stop_failure=1;assert(!setenv("GKD_MENU_CHOICE","2",1));assert(!dispatch_command(&s,"usb-menu"));
  reach(&s,GKD_LIFECYCLE_RECOVERY);assert(s.lifecycle.failed_action==GKD_LIFECYCLE_ACTION_APP_STOP);
- assert(freezes==2&&thaws==1);
+ assert(freezes==freezes_before+1U&&thaws==thaws_before);
  stop_failure=0;
  before_stop=stops;before_clean=cleaned;
  cleanup_failures=1;init(&s);assert(!setenv("GKD_MENU_CHOICE","2",1));assert(!dispatch_command(&s,"usb-menu"));
@@ -959,16 +984,18 @@ int main(void)
  network_poll(&s,now_ms());assert(s.network_running&&s.network_dirty);
  assert(!setenv("GKD_MENU_CHOICE","1",1));assert(!dispatch_command(&s,"usb-menu"));
  reach(&s,GKD_LIFECYCLE_STORAGE);assert(!s.network_running&&!s.network_dirty&&!s.network_desired);
- assert(!dispatch_command(&s,"return"));reach(&s,GKD_LIFECYCLE_ACTIVE);
+ assert(!dispatch_command(&s,"return"));reach(&s,GKD_LIFECYCLE_WAIT_APP_READY);
+ s.session.state=GKD_SESSION_READY;reach(&s,GKD_LIFECYCLE_ACTIVE);
  assert(s.network_desired);
+ s.session.ready.init=getpid();
  network_poll(&s,now_ms()+3000U);assert(s.network_running);
  assert(!setenv("GKD_NETWORK_STOP_FAIL","1",1));
- unsigned before_pause=pauses;
+ unsigned before_storage_stop=stops;
  assert(!dispatch_command(&s,"usb-menu"));reach(&s,GKD_LIFECYCLE_RECOVERY);
- assert(pauses==before_pause&&s.network_dirty&&s.network_error);
+ assert(stops==before_storage_stop&&s.network_dirty&&s.network_error);
  assert(!unsetenv("GKD_NETWORK_STOP_FAIL"));
  assert(!dispatch_command(&s,"retry"));reach(&s,GKD_LIFECYCLE_STORAGE);
- assert(!s.network_dirty&&pauses==before_pause+1U);
+ assert(!s.network_dirty&&stops==before_storage_stop+1U);
 
  init(&s);s.session.ready.init=getpid();s.network_desired=1;
  network_poll(&s,now_ms());assert(s.network_running&&s.network_dirty);
@@ -988,15 +1015,28 @@ int main(void)
  assert(s.lifecycle.state==GKD_LIFECYCLE_ACTIVE&&!s.lifecycle.power_quiesced&&!s.media.paused&&s.network_desired);
 
  init(&s);s.session.ready.init=getpid();
+ write_file(APP_GENERATION,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",0444);
+ idle_result=GKD_APP_IDLE_BUSY;
+ assert(dispatch_command(&s,"config-save")<0&&errno==EBUSY&&s.settings_job.pid<=0);
+ idle_result=GKD_APP_IDLE_ACQUIRED;
+ unsigned cli_releases=idle_releases;
  assert(!dispatch_command(&s,"config-save"));
- assert(s.purpose==JOB_CONFIG_SAVE&&s.config_save_status==1);
+ assert(s.purpose==JOB_CONFIG_SAVE&&s.config_save_status==1&&s.settings_save_status==1);
+ assert(s.settings_job.transaction&&!s.settings_job.deadline&&s.job.pid<=0);
+ assert(gkd_app_job_cancel(&s.settings_job,now_ms())<0&&errno==EBUSY);
  assert(dispatch_command(&s,"usb-menu")<0&&errno==EBUSY);
+ assert(dispatch_command(&s,"config-save")<0&&errno==EBUSY);
+ s.stopping=1;assert(!stop_progress(&s)&&!s.stop_host_requested);s.stopping=0;
  while(s.purpose!=JOB_NONE){jobs(&s);usleep(1000);}
- assert(s.config_save_status==2&&!s.config_save_error);
+ assert(s.config_save_status==2&&!s.config_save_error&&idle_releases==cli_releases+1U);
  assert(!setenv("GKD_USB_FAIL","1",1));assert(!dispatch_command(&s,"config-save"));
  while(s.purpose!=JOB_NONE){jobs(&s);usleep(1000);}
  assert(s.config_save_status==-1&&s.config_save_error);
  assert(!unsetenv("GKD_USB_FAIL"));
+ assert(!setenv("GKD_CONFIG_UNKNOWN","1",1));assert(!dispatch_command(&s,"config-save"));
+ while(s.purpose!=JOB_NONE){jobs(&s);usleep(1000);}
+ assert(s.config_save_status==-2&&s.config_save_error&&s.terminal_error);
+ assert(!unsetenv("GKD_CONFIG_UNKNOWN"));
  write_file(APP_RUNTIME_ID,"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",0444);
  write_file(APP_PREPARE,"#!/bin/sh\n[ \"$6\" = --inspect ] || exit 1\nprintf 'GKDSU_INSPECT=PASS package=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb from=3.5 to=3.6\\n'\n",0700);
  assert(!mkdir("/media/sdcard",0700)||errno==EEXIST);
@@ -1143,6 +1183,6 @@ int main(void)
  assert(!unlink(APP_NETWORK));
  assert(!unlink(APP_GAME));
  assert(!unlink(APP_MENU));assert(!unlink(APP_USB));assert(!unlink(APP_LUN));
- puts("GKD_APP_SERVICE_FIXTURE=PASS real-job/menu-result/storage-same-app/debug-ready/fail-export/fail-stop/game/network-stop-barrier/retry/config-save/update-gates/transaction/exact-receipts/recover-then-reboot/update-entry/composite-trial-good/menu-stop/control-receipt/reaped-cleanup-retry/power-quiesce-retry/transaction-suspend-busy/power-resume/network-stop-explicit-retry/ICS-cleanup-after-init-exit");
+ puts("GKD_APP_SERVICE_FIXTURE=PASS real-job/menu-result/storage-restart/debug-ready/fail-export/fail-stop/game/network-stop-barrier/retry/config-save/update-gates/transaction/exact-receipts/recover-then-reboot/update-entry/composite-trial-good/menu-stop/control-receipt/reaped-cleanup-retry/power-quiesce-retry/transaction-suspend-busy/power-resume/network-stop-explicit-retry/ICS-cleanup-after-init-exit");
  return 0;
 }

@@ -292,20 +292,26 @@ static int add_map(struct gkd_menu_vt_config *c,unsigned short source,unsigned s
  if(c->map_count==GKD_INPUT_ROUTE_MAPS){errno=E2BIG;return -1;}
  c->maps[c->map_count++]=(struct gkd_input_route_map){source,target};return 0;
 }
-int gkd_input_route_compile(unsigned style,unsigned short trigger,const struct gkd_menu_profile *p,
+int gkd_input_route_compile(unsigned style,unsigned short trigger,unsigned short brightness,const struct gkd_menu_profile *p,
  struct gkd_menu_vt_config *out)
 {
  if(!out||!p||style>=GKD_INPUT_STYLE_COUNT||!trigger||trigger>KEY_MAX||
+    !brightness||brightness>KEY_MAX||brightness==trigger||
     p->map_count>GKD_INPUT_ROUTE_MAPS||p->key_count>GKD_MENU_CHORD_MAX){errno=EINVAL;return -1;}
  memset(out,0,sizeof(*out));
- if(style==GKD_INPUT_RAW)return 0;
- out->version=GKD_MENU_VT_VERSION;out->hold_ms=100;out->trigger=trigger;
+ out->version=GKD_MENU_VT_VERSION;out->hold_ms=100;
+ /* Every style reserves the physical MENU key for the selected emulator
+  * action. Raw leaves game-button mappings alone. */
+ out->trigger=trigger;
+ if(add_map(out,brightness,0))return -1;
  /* Original A/B and X/Y output roles are exchanged for Xbox/PS physical
   * conventions. The PS style shares the functional layout, with PS prompts. */
- if(add_map(out,KEY_LEFTCTRL,KEY_LEFTALT)||add_map(out,KEY_LEFTALT,KEY_LEFTCTRL)||
-    add_map(out,KEY_LEFTSHIFT,KEY_SPACE)||add_map(out,KEY_SPACE,KEY_LEFTSHIFT))return -1;
- for(unsigned i=0;i<p->map_count;i++)
-  if(add_map(out,p->maps[i].source,p->maps[i].target))return -1;
+ if(style!=GKD_INPUT_RAW){
+  if(add_map(out,KEY_LEFTCTRL,KEY_LEFTALT)||add_map(out,KEY_LEFTALT,KEY_LEFTCTRL)||
+     add_map(out,KEY_LEFTSHIFT,KEY_SPACE)||add_map(out,KEY_SPACE,KEY_LEFTSHIFT))return -1;
+  for(unsigned i=0;i<p->map_count;i++)
+   if(add_map(out,p->maps[i].source,p->maps[i].target))return -1;
+ }
  if(p->action==GKD_MENU_NATIVE){out->count=1;out->keys[0]=KEY_HOME;}
  else if(p->action==GKD_MENU_CHORD){
   out->count=p->key_count;out->hold_ms=p->hold_ms;memcpy(out->keys,p->keys,sizeof(out->keys));

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #define _GNU_SOURCE
 #include "gkd-app-menu-config.h"
+#include <linux/input.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -84,8 +85,16 @@ int main(int argc,char **argv)
     assert(gkd_menu_config_select_game(actual,HASH,"default.gcw0.desktop","PocketSNES",1,game,&selected)==1);
     assert(!strcmp(selected.id,"game")&&selected.map_count==2);
     struct gkd_menu_vt_config route;
-    assert(!gkd_input_route_compile(0,102,&selected,&route)&&!route.version&&!route.map_count);
-    assert(gkd_input_route_compile(1,102,&selected,&route)==1&&route.count==1&&route.keys[0]==102);
+    assert(gkd_input_route_compile(0,102,KEY_END,&selected,&route)==1&&
+           route.version==GKD_MENU_VT_VERSION&&route.trigger==KEY_HOME&&
+           route.count==1&&route.keys[0]==KEY_HOME&&route.map_count==1&&route.maps[0].source==KEY_END&&
+           route.maps[0].target==0);
+    struct gkd_menu_profile raw_chord=selected;
+    raw_chord.action=GKD_MENU_CHORD;raw_chord.key_count=1;raw_chord.keys[0]=KEY_ESC;
+    assert(gkd_input_route_compile(0,102,KEY_END,&raw_chord,&route)==1&&
+           route.trigger==KEY_HOME&&route.count==1&&route.keys[0]==KEY_ESC&&route.map_count==1);
+    assert(gkd_input_route_compile(1,102,KEY_END,&selected,&route)==1&&route.count==1&&route.keys[0]==102);
+    assert(route.map_count==6&&route.maps[0].source==KEY_END&&route.maps[0].target==0);
     unsigned dot=0,inherited=0;
     for(unsigned i=0;i<route.map_count;i++) {
      if(route.maps[i].source==29)dot=route.maps[i].target;
@@ -93,8 +102,9 @@ int main(int argc,char **argv)
     }
     assert(dot==57&&inherited==59);
     struct gkd_menu_vt_config xbox=route;
-    assert(gkd_input_route_compile(2,102,&selected,&route)==1&&!memcmp(&route,&xbox,sizeof(route)));
-    assert(gkd_input_route_compile(3,102,&selected,&route)<0);
+    assert(gkd_input_route_compile(2,102,KEY_END,&selected,&route)==1&&!memcmp(&route,&xbox,sizeof(route)));
+    assert(gkd_input_route_compile(3,102,KEY_END,&selected,&route)<0);
+    assert(gkd_input_route_compile(0,102,102,&selected,&route)<0);
     assert(gkd_menu_config_select_game(actual,HASH,"default.gcw0.desktop","PocketSNES",0,NULL,&selected)==1);
     assert(!strcmp(selected.id,"core")&&selected.map_count==1);
     char invalid_v2[4096];snprintf(invalid_v2,sizeof(invalid_v2),"%smap.a=KEY_ENTER\n",v2);parse(invalid_v2,0);
@@ -105,7 +115,7 @@ int main(int argc,char **argv)
     /* Real file loader and complete audited catalog. */
     assert(!gkd_menu_config_load(argv[1],actual,NULL));assert(actual->count==28);
     unsigned counts[4]={0};for(unsigned i=0;i<actual->count;i++)counts[actual->profiles[i].action]++;
-    assert(counts[GKD_MENU_NATIVE]==18&&counts[GKD_MENU_CHORD]==7&&counts[GKD_MENU_DISABLED]==2&&counts[GKD_MENU_NONE]==1);
+    assert(counts[GKD_MENU_NATIVE]==17&&counts[GKD_MENU_CHORD]==8&&counts[GKD_MENU_DISABLED]==2&&counts[GKD_MENU_NONE]==1);
     assert(gkd_menu_config_select_game(actual,"a97a8775d905bc4d6dca69dd907751537a6f36ce329bed74b5c73f96b9876377",
       "default.gcw0.desktop","gen_mini",0,NULL,&selected)==1);
     assert(!strcmp(selected.id,"genesis-sx-menu-fixed")&&selected.action==GKD_MENU_NATIVE);

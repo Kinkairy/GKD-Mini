@@ -13,6 +13,14 @@
       "sha256": "b2d22dbc946238d00ff61489e86ca367b4ff6b4c40607c4bef06534acf3c46ee",
       "bytes": 6291456,
       "purpose": "header fields only; not firmware or a rollback image"
+    },
+    "zopfli-1.0.3.tar.gz": {
+      "sha256": "09a9732e11975455921a7ec22cad75ca42ed3ea4c9cbe3ccff09750a77e03bcb",
+      "bytes": 195325,
+      "upstream": "https://github.com/google/zopfli",
+      "commit": "bd64b2f0553d4f1ef4e6627647c5d9fc8c71ffc0",
+      "license": "Apache-2.0",
+      "purpose": "deterministic gzip compression without changing the boot ABI"
     }
   },
   "kernel_source_commit": "91fe78280ac7dd0dae0f58cb271e821bd39ba97e",

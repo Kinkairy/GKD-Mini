@@ -12,6 +12,20 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#define GKD_SCREENSHOT_PATH(root,bytes) static const char screenshot_root[]=root; enum { SCREENSHOT_BYTES=bytes };
+#define GKD_SCREENSHOT_HOTKEY(name,first,second)
+#include "gkd-app-settings-contract.def"
+#undef GKD_SCREENSHOT_PATH
+#undef GKD_SCREENSHOT_HOTKEY
+typedef char screenshot_contract_size[(sizeof(((struct gkd_app_settings *)0)->screenshot_directory)==SCREENSHOT_BYTES)?1:-1];
+struct screenshot_hotkey { const char *name; unsigned first,second; };
+static const struct screenshot_hotkey screenshot_hotkeys[]={
+#define GKD_SCREENSHOT_PATH(root,bytes)
+#define GKD_SCREENSHOT_HOTKEY(name,first,second) {name,first,second},
+#include "gkd-app-settings-contract.def"
+#undef GKD_SCREENSHOT_PATH
+#undef GKD_SCREENSHOT_HOTKEY
+};
 enum field_type {UINT_FIELD,KEY_FIELD,EFFECT_FIELD,USB_FIELD,POWER_FIELD,CURVE_FIELD,LED_FIELD,HOTKEY_FIELD,PATH_FIELD,LANGUAGE_FIELD,STYLE_FIELD};
 struct field {const char *name;enum field_type type;size_t offset;unsigned low,high;};
 #define U(k,m,l,h) {k,UINT_FIELD,offsetof(struct gkd_app_settings,m),l,h}
@@ -22,6 +36,7 @@ static const struct field fields[]={
  T("ui_language",LANGUAGE_FIELD,chinese),
  T("input_style",STYLE_FIELD,input_style),
  T("input_map_menu",KEY_FIELD,menu_key),
+ T("input_map_brightness",KEY_FIELD,brightness_key),
  T("input_map_dpad_left",KEY_FIELD,left_key),
  T("input_map_dpad_right",KEY_FIELD,right_key),
  U("usb_frontend_ready_timeout_ms",frontend_timeout,5000,120000),
@@ -81,15 +96,18 @@ static int field_value(const struct field *field,char *text,struct gkd_app_setti
  void *dest=(unsigned char *)s+field->offset;unsigned *number=dest;
  switch(field->type){
  case PATH_FIELD:
-  if(strlen(text)>=256U||strncmp(text,"/media/sdcard/",14U)||!text[14]||
+  if(strlen(text)>=SCREENSHOT_BYTES||strncmp(text,screenshot_root,sizeof(screenshot_root)-1U)||!text[sizeof(screenshot_root)-1U]||
      strstr(text,"//")||strstr(text,"/../")||strstr(text,"/./")||
      !strcmp(text+strlen(text)-3U,"/..")||!strcmp(text+strlen(text)-2U,"/."))
    return -1;
   for(const unsigned char *p=(const unsigned char *)text;*p;p++)if(*p<32U||*p==127U)return -1;
   strcpy(dest,text);return 0;
  case HOTKEY_FIELD:{
-  if(!strcmp(text,"NONE")){number[0]=number[1]=0;return 0;}
-  if(!strcmp(text,"MENU+L1")){number[0]=8U;number[1]=4U;return 0;}
+  for(unsigned i=0;i<sizeof(screenshot_hotkeys)/sizeof(screenshot_hotkeys[0]);i++){
+   if(!strcmp(text,screenshot_hotkeys[i].name)){
+    number[0]=screenshot_hotkeys[i].first;number[1]=screenshot_hotkeys[i].second;return 0;
+   }
+  }
   return -1;
  }
  case UINT_FIELD:return uint_value(text,field->low,field->high,number);
@@ -147,8 +165,8 @@ int gkd_app_settings_load(const char *path,struct gkd_app_settings *out)
     s.battery_low+s.battery_hysteresis>100U){errno=EINVAL;goto end;}
  for(unsigned i=0;i<8U;i++)for(unsigned j=0;j<i;j++)if(!strcmp(s.keys[i],s.keys[j])){errno=EINVAL;goto end;}
  {
-  const char *extra[]={s.menu_key,s.left_key,s.right_key};
-  for(unsigned i=0;i<3U;i++){
+  const char *extra[]={s.menu_key,s.brightness_key,s.left_key,s.right_key};
+  for(unsigned i=0;i<4U;i++){
    for(unsigned j=0;j<8U;j++)if(!strcmp(extra[i],s.keys[j])){errno=EINVAL;goto end;}
    for(unsigned j=0;j<i;j++)if(!strcmp(extra[i],extra[j])){errno=EINVAL;goto end;}
   }

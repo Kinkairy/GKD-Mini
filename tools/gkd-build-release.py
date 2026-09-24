@@ -16,11 +16,14 @@ def main():
     if not a.name or any(c not in 'abcdefghijklmnopqrstuvwxyz0123456789-' for c in a.name): p.error('invalid name')
     a.evidence.mkdir(parents=True,exist_ok=False)
     m=json.loads((ROOT/'build/rc3.6-inputs.json').read_text())
-    assert (ROOT/'VERSION').read_text().strip()==m['release']=='RC3.6'
+    if (ROOT/'VERSION').read_text().strip()!=m['release'] or m['release']!='RC3.6':
+        raise ValueError('release identity mismatch')
     for n,v in m['files'].items():
         f=a.inputs/n
-        assert not f.is_symlink() and f.stat().st_size==v['bytes'] and digest(f)==v['sha256'], n
-    assert subprocess.check_output(['docker','image','inspect','local/c-builder:2026.08.02-kernel','--format','{{.Id}}'],text=True).strip()==m['builder_image']
+        if f.is_symlink() or not f.is_file() or f.stat().st_size!=v['bytes'] or digest(f)!=v['sha256']:
+            raise ValueError('input integrity mismatch: '+n)
+    if subprocess.check_output(['docker','image','inspect','local/c-builder:2026.08.02-kernel','--format','{{.Id}}'],text=True).strip()!=m['builder_image']:
+        raise ValueError('builder image mismatch')
     source={}
     for top in ('kernel/current','system','tools','build'):
         for f in sorted((ROOT/top).rglob('*')):
@@ -45,7 +48,8 @@ def main():
         for i,c in enumerate(commands):
             with (a.evidence/('build-%d.log'%i)).open('w') as log: subprocess.run(c,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True)
             plan['completed_commands']=i+1; save()
-        assert all(digest(ROOT/n)==v for n,v in source.items()), 'source drift'
+        if not all(digest(ROOT/n)==v for n,v in source.items()):
+            raise ValueError('source drift')
         plan['outputs']={str(f):digest(f) for f in (oa/'application-a-slot.bin',ore/'recovery-r-slot.bin')}
         plan['status']='BUILD_PASS'
     except BaseException:

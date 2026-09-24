@@ -50,6 +50,8 @@ validate_uint()
 
 validate_enum()
 {
+	# One enum member only, not an empty value or a comma-separated slice.
+	case "$1" in ''|*,*) return 1 ;; esac
 	case ",$2," in *",$1,"*) return 0 ;; esac
 	return 1
 }
@@ -101,10 +103,17 @@ validate_value()
 		uint_list) validate_uint_list "$value" "$low" "$high" "$argument" ;;
 		ipv4) validate_ipv4 "$value" ;;
 		color) validate_color "$value" ;;
-		keycode) validate_enum "$value" 'KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT,KEY_LEFTCTRL,KEY_LEFTALT,KEY_SPACE,KEY_LEFTSHIFT,KEY_ENTER,KEY_ESC,KEY_TAB,KEY_BACKSPACE,KEY_PAGEUP,KEY_PAGEDOWN,KEY_KPPLUS,KEY_KPMINUS,KEY_END,KEY_HOME' ;;
+		keycode|unique_keycode) validate_enum "$value" 'KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT,KEY_LEFTCTRL,KEY_LEFTALT,KEY_SPACE,KEY_LEFTSHIFT,KEY_ENTER,KEY_ESC,KEY_TAB,KEY_BACKSPACE,KEY_PAGEUP,KEY_PAGEDOWN,KEY_KPPLUS,KEY_KPMINUS,KEY_END,KEY_HOME' ;;
 		power_keycode) validate_enum "$value" 'KEY_UP,KEY_DOWN,KEY_LEFTCTRL,KEY_LEFTALT,KEY_ENTER,KEY_ESC' ;;
 		debug_keycode) validate_enum "$value" 'KEY_LEFTALT,KEY_LEFTCTRL,KEY_UP,KEY_DOWN,KEY_KPPLUS,KEY_KPMINUS' ;;
 		hotkey) case "$value" in MENU+L1|L1+R1|L1+L2|L1+R2|R1+L2|R1+R2|L2+R2|NONE) return 0 ;; *) return 1 ;; esac ;;
+		safe_subdir)
+			# Schema supplies the root and byte bound; no A/R defaults here.
+			case "$value" in "$argument"?*) ;; *) return 1 ;; esac
+			case "$value" in *//*|*/../*|*/./*|*/..|*/.) return 1 ;; esac
+			[ "$(printf '%s' "$value" | wc -c | tr -d ' ')" -le "$high" ] || return 1
+			[ "$(printf '%s' "$value" | LC_ALL=C tr -d '\000-\037\177')" = "$value" ]
+			;;
 		path) [ "${value#/}" != "$value" ] && [ -n "$value" ] ;;
 		token)
 			case "$value" in ''|*[!A-Za-z0-9_.-]*) return 1 ;; esac
@@ -160,6 +169,10 @@ validate_cross_fields()
 	[ "$text_x" -lt 320 ] && [ "$text_y" -lt 240 ] || return 1
 	[ $((icon_x + icon_w)) -le 102 ] || return 1
 	[ $((icon_y + icon_h)) -le 228 ] || return 1
+	# Enforce only the keys marked unique by this profile's schema.
+	awk -F '|' 'NR==FNR { if ($2=="unique_keycode") unique[$1]=1; next }
+	{ at=index($0,"="); key=substr($0,1,at-1); value=substr($0,at+1)
+	  if ((key in unique) && seen[value]++) exit 1 }' "$SCHEMA" "$file" || return 1
 }
 
 schema_count()

@@ -1,0 +1,32 @@
+--- a/drivers/rtc/rtc-jz4740.c
++++ b/drivers/rtc/rtc-jz4740.c
+@@ -220,16 +220,20 @@
+ 	uint32_t scratchpad, secs, secs2;
+ 	int timeout = 5;
+ 
+-	/*
+-	 * X1830 suspend diagnostics intentionally own HSPR for persistent stage
+-	 * breadcrumbs.  Its seconds counter remains independently valid.
++	/* Boot and PM diagnostics own HSPR on X1830, so their progress values
++	 * cannot validate the clock.  Require an enabled seconds counter there;
++	 * keep the scratchpad validity contract on all other Ingenic parts.
++	 * The stable double-read below remains required on every model.
+ 	 */
+-	scratchpad = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_SCRATCHPAD);
+-	if (scratchpad != 0x12345678 &&
+-	    (rtc->type != ID_X1830 ||
+-	     ((scratchpad & 0xffffff00) != 0x38444b00 &&
+-	      (scratchpad & 0xffffff00) != 0x52323900)))
+-		return -EINVAL;
++	if (rtc->type == ID_X1830) {
++		if (!(jz4740_rtc_reg_read(rtc, JZ_REG_RTC_CTRL) &
++		      JZ_RTC_CTRL_ENABLE))
++			return -EINVAL;
++	} else {
++		scratchpad = jz4740_rtc_reg_read(rtc, JZ_REG_RTC_SCRATCHPAD);
++		if (scratchpad != 0x12345678)
++			return -EINVAL;
++	}
+ 
+ 	/* If the seconds register is read while it is updated, it can contain a
+ 	 * bogus value. This can be avoided by making sure that two consecutive

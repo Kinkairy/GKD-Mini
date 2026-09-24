@@ -2,8 +2,8 @@
 set -eu
 lane=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 project=$(CDPATH= cd -- "$lane/../.." && pwd)
-p1=${GKDSU_TARGET_P1:-/opt/gkd-build/private-state/android-reverse-private/gkd-mini/current-rc35-f0c7e607-20260913/inputs/p1.img}
-p1_sha=${GKDSU_TARGET_P1_SHA256:-11227ffdf3125b7961c3aea50203da5eaf423c11186e40b39c426cdbf52f3cac}
+p1=${GKDSU_TARGET_P1:-/opt/gkd-build/private-state/gkd-mini-system-rebuild/rc3.6-recovery/p1.img}
+p1_sha=${GKDSU_TARGET_P1_SHA256:-0d858514125eacd54bf9a565cbb1cc22e538dfcb0d53b3ea24ffb7e2afa4a0cf}
 tmp=$(mktemp -d /tmp/gkd-mini-public/gkdsu-supervisor.XXXXXX)
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
 components=${GKDSU_COMPONENTS:-$tmp/components}

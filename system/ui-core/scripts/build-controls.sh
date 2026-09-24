@@ -66,6 +66,9 @@ docker run --rm --network none --user "$(id -u):$(id -g)" \
         /out/controls-$part-sanitized
       done
     fi
+    if [ "$mode" = mips ]; then
+      /opt/toolchain/host/bin/mipsel-gcw0-linux-uclibc-strip --strip-unneeded /out/gkd-controls
+    fi
     cp /lane/device/gkd-controls-start /out/gkd-controls-start
     cd /out
     sha256sum gkd-controls gkd-controls-start controls-state-fixture controls-hardware-fixture controls-runner-fixture hardware-state-fixture menu-guard-fixture >SHA256SUMS

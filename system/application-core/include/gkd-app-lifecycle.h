@@ -30,6 +30,7 @@ enum gkd_app_lifecycle_event {
     GKD_LIFECYCLE_EVENT_DETACH,
     GKD_LIFECYCLE_EVENT_RETRY,
     GKD_LIFECYCLE_EVENT_CARD_REFRESH,
+    GKD_LIFECYCLE_EVENT_CARD_REMOVED,
     GKD_LIFECYCLE_EVENT_APP_READY,
     GKD_LIFECYCLE_EVENT_APP_EXIT
 };
@@ -46,6 +47,7 @@ enum gkd_app_lifecycle_action {
     GKD_LIFECYCLE_ACTION_GAME_PROBE,
     GKD_LIFECYCLE_ACTION_GAME_MOUNT,
     GKD_LIFECYCLE_ACTION_APP_RESUME,
+    GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK,
     GKD_LIFECYCLE_ACTION_APP_STOP,
     GKD_LIFECYCLE_ACTION_P2_RELEASE,
     GKD_LIFECYCLE_ACTION_LOOPS_RELEASE,
@@ -120,6 +122,7 @@ struct gkd_app_lifecycle {
     unsigned app_ready : 1;
     unsigned app_paused : 1;
     unsigned power_quiesced : 1;
+    unsigned card_present : 1;
 
     gkd_app_lifecycle_begin_fn begin;
     void *opaque;
@@ -139,6 +142,8 @@ int gkd_app_lifecycle_usb_transition(const struct gkd_app_lifecycle *lifecycle);
 
 int gkd_app_lifecycle_init(struct gkd_app_lifecycle *lifecycle,
     uint64_t active_generation, gkd_app_lifecycle_begin_fn begin, void *opaque);
+int gkd_app_lifecycle_init_no_app(struct gkd_app_lifecycle *lifecycle,
+    gkd_app_lifecycle_begin_fn begin, void *opaque);
 
 /*
  * generation is required for APP_READY and APP_EXIT and must be zero for every

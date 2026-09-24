@@ -28,6 +28,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include "gkd-app-storage.h"
 
 struct app_file { const char *path, *resolved, *sha256; };
 #include "gkd-app-manifest.generated.h"
@@ -187,6 +188,7 @@ static int prepare_root(void)
     int result = gkd_app_loop_mount(opk, "/newroot/mnt/SimpleMenu", loop_owner);
     close(opk);
     if (result) return -1;
+    if (gkd_storage_frontend()) return -1;
     if (gkd_app_animation_stage(&animation, 4)) return -1;
     if (gkd_app_bind_readonly(profile_inittab, "/newroot/etc/inittab") ||
         gkd_app_bind_readonly(APP_INIT, "/newroot/bin/busybox") ||

@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/* A-only constraints. R keeps the shared recovery schema. */
+GKD_SCREENSHOT_PATH("/media/sdcard/", 256)
+GKD_SCREENSHOT_HOTKEY("NONE", 0, 0)
+GKD_SCREENSHOT_HOTKEY("MENU+L1", 8, 4)

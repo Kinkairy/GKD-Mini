@@ -1,0 +1,13 @@
+#!/bin/sh
+# No host/device mounts except the read-only source; all fixtures are disposable.
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+image=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["builder_image"])' "$root/build/rc3.6-inputs.json")
+[ "$(docker image inspect "$image" --format '{{.Id}}')" = "$image" ]
+docker run --rm --network none --read-only --user 0:0 \
+ --tmpfs /tmp:exec --tmpfs /run --tmpfs /media --tmpfs /out:exec \
+ -e GKD_AUDIT_ISOLATED=1 -e PYTHONDONTWRITEBYTECODE=1 \
+ -v "$root:/src:ro" "$image" sh -ec '
+ python3 /src/tools/tests/run_audit_suite.py --isolated-root --output /out/results
+ cat /out/results/receipt.json
+ '

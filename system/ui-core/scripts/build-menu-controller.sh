@@ -38,7 +38,7 @@ docker run --rm --network none --user "$(id -u):$(id -g)" -v "$lane:/lane:ro" -v
    "$cc" $flags $extra -D_DEFAULT_SOURCE -DGKD_APPLICATION_UI=1 -I/lane/include \
     /lane/source/gkd-menu-state.c /lane/source/gkd-settings-state.c /lane/source/gkd-ui-language.c /lane/source/gkd-ui-plane-client.c /lane/tests/application_menu_fixture.c \
     /out/runner-$sanitize.o -Wl,--wrap=clock_gettime -Wl,--wrap=open -Wl,--wrap=fstat \
-    -Wl,--wrap=close -Wl,--wrap=ioctl -Wl,--wrap=poll -Wl,--wrap=__poll_chk -Wl,--wrap=read -Wl,--wrap=__read_chk $link -o /out/menu-runner-$sanitize
+    -Wl,--wrap=close -Wl,--wrap=socket -Wl,--wrap=sendto -Wl,--wrap=ioctl -Wl,--wrap=poll -Wl,--wrap=__poll_chk -Wl,--wrap=read -Wl,--wrap=__read_chk $link -o /out/menu-runner-$sanitize
    /out/menu-runner-$sanitize
   done
   "$cc" $flags -O1 -g -fsanitize=address,undefined -I/lane/include \

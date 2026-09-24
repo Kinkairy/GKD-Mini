@@ -4,7 +4,7 @@ lane=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
 mkdir "$tmp/targetlib"
-target_p1=${GKDSU_TARGET_P1:-/opt/gkd-build/private-state/android-reverse-private/gkd-mini/current-rc35-f0c7e607-20260913/inputs/p1.img}
+target_p1=${GKDSU_TARGET_P1:-/opt/gkd-build/private-state/gkd-mini-system-rebuild/rc3.6-recovery/p1.img}
 debugfs -R "dump /usr/lib/libcrypto.so.1.0.0 $tmp/targetlib/libcrypto.so.1.0.0" "$target_p1" >/dev/null 2>&1
 debugfs -R "dump /lib/libdl-0.9.33.2.so $tmp/targetlib/libdl-0.9.33.2.so" "$target_p1" >/dev/null 2>&1
 [ "$(sha256sum "$tmp/targetlib/libcrypto.so.1.0.0" | awk '{print $1}')" = 96f924f4615e9cfa59d9618684c54a723f490c1e880ea923b2dbdb8d59ec586d ]

@@ -137,6 +137,7 @@ struct service {
  unsigned osd_sequence,status_sequence,status_kind;
  uint16_t status_pixels[GKD_UI_WIDTH*GKD_UI_HEIGHT];
  uint64_t status_renew,status_hiding,status_expires,charge_until,status_retry,button_osd_until;
+ uint64_t storage_busy_recover_at;
  uint64_t job_osd_renew;
  pid_t game_wait_peer;
  int game_wait_pin;
@@ -272,7 +273,8 @@ static void network_poll(struct service *s,uint64_t now)
  if(s->network_error||s->network_running)return;
  if(!s->network_desired){
   if(s->network_dirty&&network_start_job(s,1))s->network_error=errno;
- }else if(s->lifecycle.state==GKD_LIFECYCLE_ACTIVE&&now>=s->network_next){
+ }else if(s->lifecycle.state==GKD_LIFECYCLE_ACTIVE&&
+           s->lifecycle.app_running&&s->lifecycle.app_ready&&now>=s->network_next){
   if(network_start_job(s,0)){
    fprintf(stderr,"GKD_APP_NETWORK=FAILED errno=%d\n",errno);s->network_next=now+2000U;
   }
@@ -425,6 +427,8 @@ static int status_screen(struct service *s,uint64_t now)
   }
   if(kind!=3U&&kind!=s->status_kind)fprintf(stderr,"GKD_APP_USB_OSD=%s ttl_ms=%u\n",kind==1U?"STORAGE":kind==2U?"DEBUG":"CHARGE",ttl);
   s->status_kind=kind;s->status_renew=now+500U;s->status_expires=now+ttl;s->status_retry=0;
+  if(kind==3U&&s->storage_busy_recover_at==UINT64_MAX)
+   s->storage_busy_recover_at=now+ttl;
   return 0;
  }
  if(kind!=s->status_kind)s->status_renew=0;
@@ -467,6 +471,8 @@ static void finish(struct service *s,int error)
   (unsigned)action,(unsigned long long)token,error?"FAILED":"PASS",error);
  if(error){
   if(gkd_app_lifecycle_fail(&s->lifecycle,token,error))s->terminal_error=errno;
+  if(action==GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK&&error==EBUSY)
+   s->storage_busy_recover_at=UINT64_MAX;
   if(s->update_status==3){
    s->update_status=-1;s->update_error=error;
    fprintf(stderr,"GKD_APP_UPDATE=FAILED errno=%d\n",error);
@@ -486,7 +492,7 @@ static void finish(struct service *s,int error)
  }
  if(!error&&!s->stopping&&(action==GKD_LIFECYCLE_ACTION_USB_CHARGE||
     action==GKD_LIFECYCLE_ACTION_APP_RESUME||action==GKD_LIFECYCLE_ACTION_DISPLAY_THAW||action==GKD_LIFECYCLE_ACTION_POWER_RESUME))
-  s->network_desired=s->usb_stable==1;
+  s->network_desired=s->usb_stable==1&&s->lifecycle.app_running&&s->lifecycle.app_ready;
 }
 static int job_start(struct service *s,char *const argv[],unsigned timeout,enum job_purpose purpose)
 {
@@ -525,13 +531,20 @@ static int read_generation(char value[65])
  memcpy(value,bytes,64U);value[64]=0;
  if(!settings_hash(value)){errno=EPROTO;return -1;}return 0;
 }
-static int settings_snapshot(struct service *s)
+static int configuration_snapshot(struct service *s)
 {
  struct gkd_app_settings settings;struct gkd_ui_catalog texts;char before[65],after[65];
  if(read_generation(before)||gkd_app_settings_load(APP_CONFIG,&settings)||gkd_ui_catalog_load(&texts,APP_CONFIG)||read_generation(after))return -1;
  if(strcmp(before,after)){errno=ESTALE;return -1;}
- if(settings.auto_suspend_seconds%60U||!gkd_settings_sleep_valid(settings.auto_suspend_seconds/60U)){errno=ERANGE;return -1;}
  s->settings=settings;s->texts=texts;memcpy(s->settings_generation,after,sizeof(after));return 0;
+}
+static int settings_snapshot(struct service *s)
+{
+ if(configuration_snapshot(s))return -1;
+ if(s->settings.auto_suspend_seconds%60U||!gkd_settings_sleep_valid(s->settings.auto_suspend_seconds/60U)){
+  errno=ERANGE;return -1;
+ }
+ return 0;
 }
 static int settings_failure(const char *text,int *recoverable,int *error)
 {
@@ -559,6 +572,7 @@ static int result_osd(struct service *s,int success,unsigned ttl)
 static void settings_poll(struct service *s)
 {
  if(s->settings_save_status!=1)return;
+ int from_cli=s->purpose==JOB_CONFIG_SAVE;
  enum gkd_app_job_state state=gkd_app_job_poll(&s->settings_job,now_ms());
  /* The menu owns the fullscreen plane and renders the shared spinner while
   * saving. The service reports completion/failure, without a competing OSD. */
@@ -569,7 +583,7 @@ static void settings_poll(struct service *s)
     !strncmp(s->settings_job.output,success,sizeof(success)-1U)){
   memcpy(hash,s->settings_job.output+sizeof(success)-1U,64U);hash[64]=0;
   snprintf(expected,sizeof(expected),"%s%s\n",success,hash);
-  if(settings_hash(hash)&&!strcmp(s->settings_job.output,expected)&&!settings_snapshot(s)&&
+  if(settings_hash(hash)&&!strcmp(s->settings_job.output,expected)&&!configuration_snapshot(s)&&
      !strcmp(s->settings_generation,hash))saved=1;
  }
  if(saved){
@@ -589,6 +603,11 @@ static void settings_poll(struct service *s)
   (void)result_osd(s,0,SETTINGS_OSD_MS);
  }
  s->settings_osd_renew=0;
+ if(from_cli){
+  s->config_save_status=saved?2:s->settings_save_status==-2?-2:-1;s->config_save_error=saved?0:error;
+  s->purpose=JOB_NONE;s->last_activity=now_ms();
+  fprintf(stderr,"%s",s->settings_receipt);
+ }
  gkd_app_job_close(&s->settings_job);
  /* No owner may resume SM while persistence is still changing. */
  if(s->purpose!=JOB_MENU)gkd_app_idle_lease_release(&s->settings_lease);
@@ -701,7 +720,9 @@ static void game_card_poll(struct service *s,uint64_t now)
  if(generation==s->card_generation||now-s->card_changed<200U)return;
  if(s->stopping||s->terminal_error||s->trial_checked!=2||s->purpose!=JOB_NONE||s->update_status>0||s->update_lease_owned||
     s->settings_save_status==1||s->request.action!=GKD_LIFECYCLE_ACTION_NONE||no_lun())return;
- if(!gkd_app_lifecycle_event(&s->lifecycle,GKD_LIFECYCLE_EVENT_CARD_REFRESH,0)){
+ enum gkd_app_lifecycle_event event=generation?
+  GKD_LIFECYCLE_EVENT_CARD_REFRESH:GKD_LIFECYCLE_EVENT_CARD_REMOVED;
+ if(!gkd_app_lifecycle_event(&s->lifecycle,event,0)){
   s->card_generation=generation;s->card_refreshing=1;
   fprintf(stderr,"GKD_GAME_CARD=REFRESH generation=%llu\n",(unsigned long long)generation);
  }
@@ -765,6 +786,15 @@ static void operation(struct service *s)
  case GKD_LIFECYCLE_ACTION_APP_RESUME:
   result=gkd_app_media_resume(&s->media);
   if(!result){gkd_app_media_close(&s->media);result=events_mode(s,0);}break;
+ case GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK:{
+  struct gkd_app_idle_lease lease=GKD_APP_IDLE_LEASE_INIT;
+  enum gkd_app_idle_result idle=gkd_app_idle_lease_acquire(
+   &lease,s->session.ready.host,s->session.ready.init);
+  if(idle==GKD_APP_IDLE_ACQUIRED){
+   gkd_app_idle_lease_release(&lease);result=0;
+  }else{if(idle==GKD_APP_IDLE_BUSY)errno=EBUSY;result=-1;}
+  break;
+ }
  case GKD_LIFECYCLE_ACTION_APP_STOP:
    if(s->session.pid<=0&&(s->session.state==GKD_SESSION_STOPPED||s->session.state==GKD_SESSION_FAILED)){
     result=gkd_app_profile_cleanup(s->session.ready.host);break;
@@ -790,6 +820,7 @@ static void operation(struct service *s)
  case GKD_LIFECYCLE_ACTION_POWER_QUIESCE:
   result=s->events.exclusive||s->power_guard.lease_fd>=0?0:gkd_menu_guard_owner_enter(&s->power_guard);
   if(result)break;
+  if(!s->lifecycle.app_running)break;
   /* The update lease pins the application mount namespace. Drop it once
    * input is owned, before worker teardown tries to detach its loops. */
   if(s->power_event!=GKD_LIFECYCLE_EVENT_SUSPEND)update_release(s);
@@ -800,11 +831,15 @@ static void operation(struct service *s)
    else {result=gkd_app_session_stop(&s->session,now_ms());if(!result)return;}
   break;
  case GKD_LIFECYCLE_ACTION_POWER_CARD_RELEASE:
-  if(s->power_event==GKD_LIFECYCLE_EVENT_SUSPEND)result=sync_application(s);
+  if(s->power_event==GKD_LIFECYCLE_EVENT_SUSPEND){
+   if(s->lifecycle.app_running)result=sync_application(s);
+   else sync();
+  }
   else {result=command(s,APP_GUARD,"mmcblk0");if(!result)return;}
   break;
  case GKD_LIFECYCLE_ACTION_POWER_SUSPEND:result=suspend_system();break;
  case GKD_LIFECYCLE_ACTION_POWER_RESUME:
+  if(!s->lifecycle.app_running){gkd_menu_guard_owner_exit(&s->power_guard);break;}
   result=gkd_app_media_resume(&s->media);
   if(!result){gkd_app_media_close(&s->media);result=events_mode(s,0);
    if(!result)gkd_menu_guard_owner_exit(&s->power_guard);}break;
@@ -985,6 +1020,8 @@ fail:
 static void jobs(struct service *s)
 {
  settings_poll(s);
+ /* CLI and menu persistence are owned by settings_job, never the cancellable job. */
+ if(s->purpose==JOB_CONFIG_SAVE)return;
  enum gkd_app_job_state state;
  if(s->purpose==JOB_NONE)return;
  state=gkd_app_job_poll(&s->job,now_ms());
@@ -1133,11 +1170,6 @@ static void jobs(struct service *s)
   int error=state==GKD_JOB_DONE?0:s->job.error?s->job.error:EIO;
   gkd_app_job_close(&s->job);s->purpose=JOB_NONE;
   if(error)finish(s,error);else start_application(s);
- }else if(s->purpose==JOB_CONFIG_SAVE){
-  s->config_save_error=state==GKD_JOB_DONE?0:s->job.error?s->job.error:EIO;
-  s->config_save_status=s->config_save_error?-1:2;
-  if(s->job.output[0])fprintf(stderr,"%s",s->job.output);
-  gkd_app_job_close(&s->job);s->purpose=JOB_NONE;
  }else if(s->purpose==JOB_SCREENSHOT){
   static const char captured[]="GKD_SCREENSHOT_CAPTURED\n";
   static const char prefix[]="GKD_SCREENSHOT_RESULT=success filename=";
@@ -1155,6 +1187,13 @@ static void jobs(struct service *s)
   int error=state==GKD_JOB_DONE?0:s->job.error?s->job.error:EIO;
   gkd_app_job_close(&s->job);s->purpose=JOB_NONE;finish(s,error);
  }
+}
+static int start_without_frontend(struct service *s)
+{
+ if(gkd_app_lifecycle_init_no_app(&s->lifecycle,begin,s))return -1;
+ s->session_generation=1U;s->boot_ready=1;s->last_activity=now_ms();
+ s->events_live=1;puts("GKD_APPLICATION=READY");fflush(stdout);
+ return 0;
 }
 static void session(struct service *s)
 {
@@ -1235,14 +1274,23 @@ static int dispatch_command(struct service *s,const char *command_text)
   s->purpose=JOB_UPDATE_CHECK;s->update_status=1;s->update_error=0;return 0;
  }
  if(!strcmp(command_text,"config-save")){
-  if(s->lifecycle.state!=GKD_LIFECYCLE_ACTIVE||s->purpose!=JOB_NONE){errno=EBUSY;return -1;}
+  if(s->lifecycle.state!=GKD_LIFECYCLE_ACTIVE||s->purpose!=JOB_NONE||
+     s->request.action!=GKD_LIFECYCLE_ACTION_NONE||s->game_wait_peer){errno=EBUSY;return -1;}
+  enum gkd_app_idle_result idle=gkd_app_idle_lease_acquire(&s->settings_lease,s->session.ready.host,s->session.ready.init);
+  if(idle!=GKD_APP_IDLE_ACQUIRED){if(idle==GKD_APP_IDLE_BUSY)errno=EBUSY;return -1;}
+  if(configuration_snapshot(s)){
+   int error=errno;gkd_app_idle_lease_release(&s->settings_lease);errno=error;return -1;
+  }
   int fd=application_directory(s,"/media/data/local/etc","/dev/mmcblk0p2");
-  if(fd<0)return -1;
-  char *argv[]={APP_CONFIG_STORE,"save","3",NULL};
-  int result=gkd_app_job_start_fd(&s->job,argv,30000U,now_ms(),fd),error=errno;
-  close(fd);errno=error;
-  if(!result){s->purpose=JOB_CONFIG_SAVE;s->config_save_status=1;s->config_save_error=0;}
-  return result;
+  if(fd<0){int error=errno;gkd_app_idle_lease_release(&s->settings_lease);errno=error;return -1;}
+  char *argv[]={APP_CONFIG_STORE,"save","3",s->settings_generation,NULL};
+  int result=gkd_app_job_start_transaction(&s->settings_job,argv,now_ms(),fd),error=errno;
+  close(fd);
+  if(!result){
+   s->purpose=JOB_CONFIG_SAVE;s->config_save_status=1;s->config_save_error=0;
+   s->settings_save_status=1;strcpy(s->settings_receipt,"GKD_APP_SETTINGS=SAVING\n");
+  }else gkd_app_idle_lease_release(&s->settings_lease);
+  errno=error;return result;
  }
  if(!strcmp(command_text,"settings-menu")){
   if(s->lifecycle.state!=GKD_LIFECYCLE_ACTIVE||s->purpose!=JOB_NONE){errno=EBUSY;return -1;}
@@ -1280,6 +1328,18 @@ static int dispatch_command(struct service *s,const char *command_text)
   return gkd_app_lifecycle_event(&s->lifecycle,GKD_LIFECYCLE_EVENT_SUSPEND,0);
  }
  errno=EINVAL;return -1;
+}
+/* An active game is never exported. Keep the existing FAILED OSD long enough
+ * to read, then dismiss the recoverable preflight failure automatically. */
+static void storage_busy_recover(struct service *s,uint64_t now)
+{
+ if(!s->storage_busy_recover_at||s->storage_busy_recover_at==UINT64_MAX||
+    now<s->storage_busy_recover_at)return;
+ s->storage_busy_recover_at=0;
+ if(s->lifecycle.state!=GKD_LIFECYCLE_RECOVERY||
+    s->lifecycle.failed_action!=GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK)return;
+ if(dispatch_command(s,"return")||dispatch_command(s,"retry"))
+  fprintf(stderr,"GKD_APP_STORAGE_BUSY_RECOVER=FAILED errno=%d\n",errno);
 }
 static int game_wait(struct service *s,const struct ucred *peer,int active)
 {
@@ -1334,7 +1394,7 @@ static void control(struct service *s)
    s->update_status==4?"NEEDS_REBOOT":s->update_status==3?"REBOOTING":s->update_status==2?"PREPARING":s->update_status==1?"CHECKING":s->update_status<0?"FAILED":"IDLE",s->update_error);
  else if(!strcmp(input,"config-status"))
   snprintf(reply,sizeof(reply),"GKD_APPLICATION_CONFIG=%s errno=%d\n",
-   s->config_save_status==2?"SAVED":s->config_save_status==1?"SAVING":s->config_save_status<0?"FAILED":"IDLE",s->config_save_error);
+   s->config_save_status==2?"SAVED":s->config_save_status==1?"SAVING":s->config_save_status==-2?"UNKNOWN":s->config_save_status<0?"FAILED":"IDLE",s->config_save_error);
  else if(!strcmp(input,"status"))
   snprintf(reply,sizeof(reply),"GKD_APPLICATION state=%u action=%u host=%d init=%d app=%d error=%d\n",
    (unsigned)s->lifecycle.state,(unsigned)s->request.action,s->session.ready.host,s->session.ready.init,
@@ -1473,6 +1533,9 @@ static void input_events(struct service *s,uint64_t now)
  if(blocked)return;
  if(s->game_wait_peer&&!(events&GKD_APP_EVENT_POWER))return;
  if((events&GKD_APP_EVENT_RETURN)&&s->lifecycle.state==GKD_LIFECYCLE_RECOVERY){
+  if(s->lifecycle.failed_action==GKD_LIFECYCLE_ACTION_GAME_IDLE_CHECK){
+   s->storage_busy_recover_at=0;(void)dispatch_command(s,"return");
+  }
   (void)dispatch_command(s,"retry");return;
  }
  if((events&GKD_APP_EVENT_RETURN)&&
@@ -1481,6 +1544,10 @@ static void input_events(struct service *s,uint64_t now)
  }
  if(s->lifecycle.state!=GKD_LIFECYCLE_ACTIVE)return;
  if(events&GKD_APP_EVENT_POWER){
+  if(!s->lifecycle.app_running){
+   if(dispatch_command(s,"power-menu"))fprintf(stderr,"GKD_APP_POWER=FAILED errno=%d\n",errno);
+   return;
+  }
   if(menu_busy){s->menu_power_pending=1;if(gkd_app_job_cancel(&s->job,now))s->terminal_error=errno;return;}
   if(game_job(s,0))fprintf(stderr,"GKD_APP_GAME=FAILED errno=%d\n",errno);
   return;
@@ -1645,7 +1712,10 @@ int main(int argc,char **argv)
  game_card_poll(&s,now_ms());
  /* Own the no-card screen before the frontend can submit its first frame. */
  if(s.card_initialized&&!s.card_generation&&status_screen(&s,now_ms()))s.terminal_error=errno;
- if(!s.terminal_error&&(notice_start_prepare(&s)||gkd_app_session_start(&s.session,s.settings.frontend_timeout,now_ms())))s.terminal_error=errno;
+ if(!s.terminal_error&&s.card_initialized&&!s.card_generation){
+  if(start_without_frontend(&s))s.terminal_error=errno;
+ }else if(!s.terminal_error&&
+  (notice_start_prepare(&s)||gkd_app_session_start(&s.session,s.settings.frontend_timeout,now_ms())))s.terminal_error=errno;
  for(;;){
   if(interrupted){s.stopping=1;interrupted=0;}
   if(stop_progress(&s))break;
@@ -1657,6 +1727,7 @@ int main(int argc,char **argv)
    uint64_t now=now_ms();
    /* Keep shared text notices alive through asynchronous cleanup/mount/start. */
    if((s.request.action==GKD_LIFECYCLE_ACTION_NONE||s.card_refreshing||gkd_app_lifecycle_wait_kind(&s.lifecycle))&&status_screen(&s,now))s.terminal_error=errno;
+   storage_busy_recover(&s,now);
    network_poll(&s,now);input_events(&s,now);usb_events(&s,now);battery(&s,now);game_card_poll(&s,now);
   }
   if(s.lifecycle.state==GKD_LIFECYCLE_SUSPENDED)

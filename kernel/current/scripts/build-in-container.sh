@@ -78,6 +78,9 @@ else
 fi
 git -C "$worktree" apply --check "$patch"
 git -C "$worktree" apply "$patch"
+# Both A and R use the same RTC validity contract after display resume.
+git -C "$worktree" apply --check "$current/patches/0010-rtc-resume-marker.patch"
+git -C "$worktree" apply "$current/patches/0010-rtc-resume-marker.patch"
 if [ "$build_mode" = application-minimal ]; then
   install -m 0644 "$project/system/ui-core/include/gkd-ui-plane.h" \
     "$worktree/include/uapi/linux/gkd-ui-plane.h"
@@ -157,20 +160,10 @@ make -C "$worktree" O="$build" -j"$(nproc)" vmlinux dtbs vmlinux.bin modules
 
 cp "$build/arch/mips/boot/vmlinux.bin" "$output/vmlinux.bin"
 if [ "$build_mode" = application-minimal ]; then
-  # Same gzip/DEFLATE boot ABI, deterministic mtime zero. The pinned builder's
-  # zlib encoder fits the fixed A kernel reservation; verify exact raw parity.
-  python3 - "$output/vmlinux.bin" "$output/vmlinux.bin.gz" <<'PY'
-import gzip, sys, zlib
-from pathlib import Path
-raw = Path(sys.argv[1]).read_bytes()
-encoder = zlib.compressobj(9, zlib.DEFLATED, 31, 8, zlib.Z_DEFAULT_STRATEGY)
-packed = encoder.compress(raw) + encoder.flush()
-if gzip.decompress(packed) != raw or packed[4:8] != bytes(4):
-    raise SystemExit("GKD_KERNEL_GZIP=BLOCKED parity-or-timestamp")
-with Path(sys.argv[2]).open("xb") as output:
-    output.write(packed)
-print("GKD_KERNEL_GZIP=PASS encoder=zlib-" + zlib.ZLIB_RUNTIME_VERSION + " bytes=" + str(len(packed)))
-PY
+  # Standard gzip remains the boot ABI; pin the stronger encoder source.
+  python3 "$current/scripts/compress-kernel.py" \
+    "$output/vmlinux.bin" "$output/vmlinux.bin.gz" \
+    /opt/gkd-build/private-state/gkd-mini-system-rebuild/rc3.6-build-inputs/zopfli-1.0.3.tar.gz
 else
   gzip -9 -n -c "$output/vmlinux.bin" >"$output/vmlinux.bin.gz"
 fi

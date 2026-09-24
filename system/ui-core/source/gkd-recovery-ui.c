@@ -34,6 +34,9 @@ int gkd_r_poweroff(void);
 #define RAM_FONT "/run/gkd-ui/ui.psf"
 #define INPUT_ROOT "/dev/input"
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#ifndef GKD_RECOVERY_BRIGHTNESS_PATH
+#define GKD_RECOVERY_BRIGHTNESS_PATH "/sys/class/backlight/gkd350-backlight/brightness"
+#endif
 
 struct runtime {
 	struct gkd_ui_config config;
@@ -194,6 +197,22 @@ static int next_key(int fd)
 #define RUNTIME_NEXT_KEY(runtime) gkd_input_owner_next_key(&(runtime)->input)
 #endif
 
+static int cycle_recovery_brightness(void)
+{
+	static const unsigned steps[]={2,10,20,30,40,50,60,70,80,90,100};
+	char text[16],*end;unsigned next=steps[0];ssize_t n;
+	int fd=open(GKD_RECOVERY_BRIGHTNESS_PATH,O_RDWR|O_CLOEXEC|O_NOFOLLOW);
+	if(fd<0)return -1;
+	n=pread(fd,text,sizeof(text)-1U,0);
+	if(n<=0||n>=(ssize_t)sizeof(text)){close(fd);errno=EIO;return -1;}
+	text[n]=0;unsigned long current=strtoul(text,&end,10);
+	if(end==text||(*end&&(*end!='\n'||end[1]))||!current||current>100U){close(fd);errno=EPROTO;return -1;}
+	for(unsigned i=0;i<ARRAY_SIZE(steps);i++)if(steps[i]>current){next=steps[i];break;}
+	n=snprintf(text,sizeof(text),"%u",next);
+	int result=n>0&&n<(ssize_t)sizeof(text)&&pwrite(fd,text,(size_t)n,0)==n?0:-1;
+	int saved=result?(errno?errno:EIO):0;close(fd);errno=saved;return result;
+}
+
 static void present(struct runtime *runtime)
 {
 #if GKD_DEDICATED_RECOVERY
@@ -291,6 +310,7 @@ static int wait_for_b(struct runtime *runtime)
 	for (;;) {
 		key = RUNTIME_NEXT_KEY(runtime);
 		if (key < 0) return -1;
+		if (key == KEY_END) { (void)cycle_recovery_brightness(); continue; }
 		if (key == KEY_LEFTALT || key == KEY_ESC) return 0;
 	}
 }
@@ -352,6 +372,7 @@ static int confirm_action(struct runtime *runtime, unsigned selected)
 	for (;;) {
 		key = RUNTIME_NEXT_KEY(runtime);
 		if (key < 0) return -1;
+		if (key == KEY_END) { (void)cycle_recovery_brightness(); continue; }
 		if (key == KEY_LEFTCTRL || key == KEY_ENTER)
 			return run_action(runtime, selected);
 		if (key == KEY_LEFTALT || key == KEY_ESC) return 0;
@@ -399,6 +420,7 @@ static int device_main(void)
 		runtime.result_notice = 0;
 		if (key < 0) goto out;
 		if (key == 0) continue;
+		if (key == KEY_END) { (void)cycle_recovery_brightness(); continue; }
 		if (key == KEY_UP) selected = (selected + GKD_UI_MENU_ITEMS - 1U) %
 			GKD_UI_MENU_ITEMS;
 		else if (key == KEY_DOWN) selected = (selected + 1U) %

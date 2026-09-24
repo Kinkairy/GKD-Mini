@@ -11,21 +11,34 @@ export GKD_CONFIG_RENAME=/usr/sbin/gkd-config-rename
 case "$1" in
 apply)
  [ "$#" = 1 ] || exit 64
- /usr/sbin/gkd-config apply
- /usr/sbin/gkd-application-service --control config-save
+ # config.override.conf is the proposal. The service owns validate/commit/rollback.
+ if receipt=$(/usr/sbin/gkd-application-service --control config-save); then
+  printf '%s\n' "$receipt"
+ else
+  [ -z "$receipt" ] || printf '%s\n' "$receipt" >&2
+  case "$receipt" in
+   'GKD_APPLICATION_COMMAND=REJECTED errno='*) exit 1 ;;
+   *) echo 'GKD_APPLICATION_CONFIG=UNKNOWN reason=submit-receipt-unavailable' >&2; exit 75 ;;
+  esac
+ fi
  count=0
  while [ "$count" -lt 150 ]; do
-  state=$(/usr/sbin/gkd-application-service --control config-status) || exit 1
+  state=$(/usr/sbin/gkd-application-service --control config-status) || {
+   echo 'GKD_APPLICATION_CONFIG=UNKNOWN reason=status-unavailable' >&2
+   exit 75
+  }
   case "$state" in
    'GKD_APPLICATION_CONFIG=SAVED errno=0') printf '%s\n' "$state"; exit 0 ;;
    'GKD_APPLICATION_CONFIG=SAVING errno=0') ;;
-   *) printf '%s\n' "$state" >&2; exit 1 ;;
+   'GKD_APPLICATION_CONFIG=FAILED errno='*) printf '%s\n' "$state" >&2; exit 1 ;;
+   'GKD_APPLICATION_CONFIG=UNKNOWN errno='*) printf '%s\n' "$state" >&2; exit 75 ;;
+   *) printf '%s\n' "$state" >&2; echo 'GKD_APPLICATION_CONFIG=UNKNOWN reason=unexpected-status' >&2; exit 75 ;;
   esac
   usleep 200000
   count=$((count+1))
  done
- echo 'GKD_APPLICATION_CONFIG=FAILED reason=save-timeout' >&2
- exit 1
+ echo 'GKD_APPLICATION_CONFIG=PENDING reason=wait-timeout; query config-status before retrying' >&2
+ exit 75
  ;;
 validate|dump|status) [ "$#" = 1 ] || exit 64; exec /usr/sbin/gkd-config "$@" ;;
 get) [ "$#" = 2 ] || exit 64; exec /usr/sbin/gkd-config "$@" ;;

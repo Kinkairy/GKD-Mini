@@ -232,33 +232,40 @@ static int copy_atomic(int input,int directory,const char *name)
 done:
  saved=errno;if(output>=0)close(output);if(rc)unlinkat(directory,temporary,0);errno=saved;return rc;
 }
-static int transfer(int etc,int save)
+/* Loading at boot/restart is distinct from committing a live configuration.
+ * All writes of settings use settings_commit below, never this loader. */
+static int load_override(int etc)
 {
  struct stat st;int config=-1,runtime=-1,input=-1,rc=-1,saved;const char *source="override";
  if(pinned_etc(etc)||fstat(etc,&st))return -1;
- config=directory_at(etc,"gkd-mini",save,st.st_dev);
+ config=directory_at(etc,"gkd-mini",0,st.st_dev);
  if(config<0&&errno!=ENOENT)return -1;
  runtime=open(GKD_APP_CONFIG_RUNTIME,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
- if(runtime<0)goto done;
- struct stat runtime_stat;
- if(fstat(runtime,&runtime_stat)||!S_ISDIR(runtime_stat.st_mode)||runtime_stat.st_uid||(runtime_stat.st_mode&0022)){errno=EPERM;goto done;}
- if(save){
-  if(config<0){errno=ENOENT;goto done;}
-  input=openat(runtime,"config.override.conf",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
- }else{
-  if(config>=0)input=openat(config,"gdkmini.override.conf",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
-  else errno=ENOENT;
-  if(input<0&&errno==ENOENT){
-   /* Missing optional override selects the same schema's explicit profile
-    * defaults. Corrupt/unreadable overrides never select another backend. */
-   input=open(GKD_APP_CONFIG_EMBEDDED,O_RDONLY|O_CLOEXEC|O_NOFOLLOW);source="defaults";
-  }
+ if(runtime<0||secure_root_directory(runtime))goto done;
+ if(config>=0)input=openat(config,"gdkmini.override.conf",O_RDONLY|O_CLOEXEC|O_NOFOLLOW);
+ else errno=ENOENT;
+ if(input<0&&errno==ENOENT){
+  input=open(GKD_APP_CONFIG_EMBEDDED,O_RDONLY|O_CLOEXEC|O_NOFOLLOW);source="defaults";
  }
  if(input<0)goto done;
- rc=copy_atomic(input,save?config:runtime,save?"gdkmini.override.conf":"config.override.conf");
- if(!rc)printf("GKD_APP_CONFIG=%s source=%s\n",save?"SAVED":"LOADED",source);
+ rc=copy_atomic(input,runtime,"config.override.conf");
+ if(!rc)printf("GKD_APP_CONFIG=LOADED source=%s\n",source);
 done:
  saved=errno;if(input>=0)close(input);if(config>=0)close(config);if(runtime>=0)close(runtime);errno=saved;return rc;
+}
+static int embedded_override(struct settings_blob *blob)
+{
+ char path[PATH_MAX];const char *source=GKD_APP_CONFIG_EMBEDDED;
+ if(strlen(source)>=sizeof(path)){errno=ENAMETOOLONG;return -1;}
+ strcpy(path,source);char *name=strrchr(path,'/');
+ if(!name||name==path||!name[1]){errno=EINVAL;return -1;}
+ *name++=0;
+ int directory=open(path,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
+ if(directory<0)return -1;
+ int rc=secure_root_directory(directory);
+ if(!rc)rc=read_optional(directory,name,blob);
+ if(!rc&&!blob->exists){errno=ENOENT;rc=-1;}
+ int saved=errno;close(directory);errno=saved;return rc;
 }
 static int target_setting(const char *line,size_t size)
 {
@@ -347,16 +354,21 @@ static int restore_settings(int etc,int config,int config_created,int runtime,
     persistent_matches(etc,config,old_persistent))return -1;
  return 0;
 }
-static enum settings_result settings_save(int etc,const char *expected,
- unsigned animation,unsigned sleep,unsigned fps,unsigned lang,unsigned style,
- config_command_fn command,void *opaque,char saved_generation[65])
+struct settings_edit { unsigned animation,sleep,fps,lang,style; };
+/* One transaction for menu edits and CLI candidates. The CLI's editable
+ * override is a proposal, not the committed effective generation. */
+static enum settings_result settings_commit(int etc,const char *expected,
+ const struct settings_edit *edit,config_command_fn command,void *opaque,
+ char saved_generation[65])
 {
- struct settings_blob old_runtime,old_persistent,candidate;
+ struct settings_blob observed_runtime,old_runtime,old_persistent,candidate;
  struct stat etc_stat;char candidate_name[80]={0},candidate_path[PATH_MAX];
+ char baseline_name[80]={0},baseline_path[PATH_MAX];
  char output[512],generation[65];int runtime=-1,config=-1;
  int lock=0,config_created=0,saved=EINVAL,result=SETTINGS_FAILED;
- if(etc<0||!generation_valid(expected)||animation>1U||
-    !gkd_settings_sleep_valid(sleep)||fps>1U||lang>1U||style>=GKD_INPUT_STYLE_COUNT||!command){
+ if(etc<0||!generation_valid(expected)||!command||!saved_generation||
+    (edit&&(edit->animation>1U||!gkd_settings_sleep_valid(edit->sleep)||
+            edit->fps>1U||edit->lang>1U||edit->style>=GKD_INPUT_STYLE_COUNT))){
   errno=EINVAL;return SETTINGS_FAILED;
  }
  if(pinned_etc(etc)||fstat(etc,&etc_stat))return SETTINGS_FAILED;
@@ -364,19 +376,31 @@ static enum settings_result settings_save(int etc,const char *expected,
  if(runtime<0||secure_root_directory(runtime))goto done;
  config=directory_at(etc,"gkd-mini",0,etc_stat.st_dev);
  if(config<0&&errno!=ENOENT)goto done;
- if(read_optional(runtime,"config.override.conf",&old_runtime))goto done;
+ if(read_optional(runtime,"config.override.conf",&observed_runtime))goto done;
  if(config>=0){
   if(read_optional(config,"gdkmini.override.conf",&old_persistent))goto done;
  }else memset(&old_persistent,0,sizeof(old_persistent));
- if(old_persistent.exists&&!same_blob(&old_runtime,&old_persistent)){errno=ESTALE;goto done;}
  if(both_generations(expected))goto done;
- if(settings_candidate(&old_runtime,animation,sleep,fps,lang,style,&candidate))goto done;
+ if(edit){
+  old_runtime=observed_runtime;
+  if(old_persistent.exists&&!same_blob(&old_runtime,&old_persistent)){errno=ESTALE;goto done;}
+  if(settings_candidate(&old_runtime,edit->animation,edit->sleep,edit->fps,edit->lang,edit->style,&candidate))goto done;
+  strcpy(baseline_path,GKD_APP_CONFIG_RUNTIME "/config.override.conf");
+ }else{
+  if(!observed_runtime.exists){errno=ENOENT;goto done;}
+  candidate=observed_runtime;
+  if(old_persistent.exists)old_runtime=old_persistent;
+  else if(embedded_override(&old_runtime))goto done;
+  snprintf(baseline_name,sizeof(baseline_name),".settings-baseline.%ld",(long)getpid());
+  if(snprintf(baseline_path,sizeof(baseline_path),GKD_APP_CONFIG_RUNTIME "/%s",baseline_name)>=
+     (int)sizeof(baseline_path)){errno=EOVERFLOW;goto done;}
+  if(atomic_blob(runtime,baseline_name,&old_runtime))goto done;
+ }
  snprintf(candidate_name,sizeof(candidate_name),".settings-candidate.%ld",(long)getpid());
  if(snprintf(candidate_path,sizeof(candidate_path),GKD_APP_CONFIG_RUNTIME "/%s",candidate_name)>=
     (int)sizeof(candidate_path)){errno=EOVERFLOW;goto done;}
  if(atomic_blob(runtime,candidate_name,&candidate))goto done;
- if(command("validate",NULL,GKD_APP_CONFIG_RUNTIME "/config.override.conf",
-            output,sizeof(output),opaque)||
+ if(command("validate",NULL,baseline_path,output,sizeof(output),opaque)||
     exact_receipt(output,"GKD_CONFIG_VALID sha256=",generation)||strcmp(generation,expected)){
   if(!errno)errno=ESTALE;
   goto done;
@@ -389,7 +413,7 @@ static enum settings_result settings_save(int etc,const char *expected,
  if(core_lock(1))goto done;
  lock=1;
  if(both_generations(expected)||
-    blob_at_matches(runtime,"config.override.conf",&old_runtime)||
+    blob_at_matches(runtime,"config.override.conf",&observed_runtime)||
     persistent_matches(etc,config,&old_persistent))goto done;
  if(config<0){
   config=directory_at(etc,"gkd-mini",1,etc_stat.st_dev);
@@ -407,6 +431,7 @@ static enum settings_result settings_save(int etc,const char *expected,
  if(both_generations(generation)||blob_at_matches(runtime,"config.override.conf",&candidate)||
     persistent_matches(etc,config,&candidate))goto rollback;
  if(unlinkat(runtime,candidate_name,0)||fsync(runtime))goto rollback;
+ if(baseline_name[0]&&(unlinkat(runtime,baseline_name,0)||fsync(runtime)))goto rollback;
  if(core_lock(0))goto rollback;
  lock=0;
  result=SETTINGS_SAVED;errno=0;goto done;
@@ -418,10 +443,27 @@ rollback:
 done:
  saved=result==SETTINGS_SAVED?0:(errno?errno:EINVAL);
  if(candidate_name[0]&&runtime>=0)unlinkat(runtime,candidate_name,0);
+ if(baseline_name[0]&&runtime>=0)unlinkat(runtime,baseline_name,0);
  if(lock&&core_lock(0)&&result!=SETTINGS_UNKNOWN)result=SETTINGS_UNKNOWN;
  if(config>=0)close(config);
  if(runtime>=0)close(runtime);
  errno=saved;return result;
+}
+static enum settings_result settings_save(int etc,const char *expected,
+ unsigned animation,unsigned sleep,unsigned fps,unsigned lang,unsigned style,
+ config_command_fn command,void *opaque,char saved_generation[65])
+{
+ const struct settings_edit edit={animation,sleep,fps,lang,style};
+ return settings_commit(etc,expected,&edit,command,opaque,saved_generation);
+}
+static int report_settings(enum settings_result result,const char *generation)
+{
+ int error=errno?errno:EIO;
+ if(result==SETTINGS_SAVED){printf("GKD_APP_SETTINGS=SAVED generation=%s\n",generation);return 0;}
+ const char *state=result==SETTINGS_UNKNOWN?"unknown":"recoverable";
+ printf("GKD_APP_SETTINGS=FAILED state=%s errno=%d\n",state,error);
+ fprintf(stderr,"GKD_APP_SETTINGS_DIAGNOSTIC state=%s errno=%d\n",state,error);
+ return 1;
 }
 static int offline_load(void)
 {
@@ -436,7 +478,7 @@ static int offline_load(void)
  if(fd<0||fstat(fd,&root))goto done;
  local=directory_at(fd,"local",0,root.st_dev);if(local<0)goto done;
  etc=directory_at(local,"etc",0,root.st_dev);if(etc<0)goto done;
- rc=transfer(etc,0);
+ rc=load_override(etc);
 done:
  saved=errno;if(etc>=0)close(etc);if(local>=0)close(local);if(fd>=0)close(fd);
  if(mounted&&umount(mountpoint)){rc=-1;saved=errno;}
@@ -454,29 +496,22 @@ int main(int argc,char **argv)
  else if(argc==9&&!strcmp(argv[1],"settings-save")&&!strcmp(argv[2],"3")){
   unsigned animation,sleep,fps,lang,style;char generation[65]={0};
   if(!exact_uint(argv[4],1U,&animation)||!exact_uint(argv[5],60U,&sleep)||
-     !gkd_settings_sleep_valid(sleep)||
-     !exact_uint(argv[6],1U,&fps)||!exact_uint(argv[7],1U,&lang)||!exact_uint(argv[8],2U,&style))errno=EINVAL;
-  else{
-   enum settings_result saved=settings_save(3,argv[3],animation,sleep,fps,lang,style,
-                                             config_command_real,NULL,generation);
-   int error=errno?errno:EIO;
-   if(saved==SETTINGS_SAVED){
-    printf("GKD_APP_SETTINGS=SAVED generation=%s\n",generation);return 0;
-   }
-   printf("GKD_APP_SETTINGS=FAILED state=%s errno=%d\n",
-          saved==SETTINGS_UNKNOWN?"unknown":"recoverable",error);
-   fprintf(stderr,"GKD_APP_SETTINGS_DIAGNOSTIC state=%s errno=%d\n",
-           saved==SETTINGS_UNKNOWN?"unknown":"recoverable",error);
-   return 1;
+     !gkd_settings_sleep_valid(sleep)||!exact_uint(argv[6],1U,&fps)||
+     !exact_uint(argv[7],1U,&lang)||!exact_uint(argv[8],2U,&style)){
+   errno=EINVAL;return report_settings(SETTINGS_FAILED,generation);
   }
-  printf("GKD_APP_SETTINGS=FAILED state=recoverable errno=%d\n",errno);
-  fprintf(stderr,"GKD_APP_SETTINGS_DIAGNOSTIC state=recoverable errno=%d\n",errno);
-  return 1;
+  enum settings_result saved=settings_save(3,argv[3],animation,sleep,fps,lang,style,
+                                           config_command_real,NULL,generation);
+  return report_settings(saved,generation);
+ }else if(argc==4&&!strcmp(argv[1],"save")&&!strcmp(argv[2],"3")){
+  char generation[65]={0};
+  enum settings_result saved=settings_commit(3,argv[3],NULL,config_command_real,NULL,generation);
+  return report_settings(saved,generation);
+ }else if(argc==3&&!strcmp(argv[1],"load")&&!strcmp(argv[2],"3"))rc=load_override(3);
+ else{
+  fputs("usage: gkd-app-config-store offline-load|load 3|save 3 EXPECTED_GEN|settings-save 3 EXPECTED_GEN ANIMATION SLEEP_MIN FPS LANG STYLE\n",stderr);
+  return 2;
  }
- else if(argc==3&&!strcmp(argv[2],"3")&&(!strcmp(argv[1],"load")||!strcmp(argv[1],"save"))){
-  if(!strcmp(argv[1],"save")&&run(GKD_APP_CONFIG_EXEC,"validate"))return 1;
-  rc=transfer(3,!strcmp(argv[1],"save"));
- }else{fputs("usage: gkd-app-config-store offline-load|load 3|save 3|settings-save 3 EXPECTED_GEN ANIMATION SLEEP_MIN FPS LANG STYLE\n",stderr);return 2;}
  if(rc)fprintf(stderr,"GKD_APP_CONFIG=FAILED errno=%d\n",errno);
  return rc?1:0;
 }

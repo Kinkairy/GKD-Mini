@@ -66,10 +66,6 @@ int gkd_app_menu_prepare(struct gkd_app_menu_launch *m,int opk,const char *deskt
  if(!m||m->fd>=0){errno=EINVAL;return -1;}
  struct gkd_app_settings settings;
  if(gkd_app_settings_load("/var/run/gkd-app/input-config/current/effective.conf",&settings))return -1;
- if(settings.input_style==GKD_INPUT_RAW){
-  memset(&m->profile,0,sizeof(m->profile));
-  fprintf(stderr,"GKD_INPUT_SESSION=READY style=raw takeover=0 auto_open=0\n");return 0;
- }
  struct gkd_menu_config *catalog=malloc(sizeof(*catalog));char hash[65];unsigned line=0;
  if(!catalog)return -1;
  int rc=user_catalog(catalog,&line);
@@ -77,9 +73,9 @@ int gkd_app_menu_prepare(struct gkd_app_menu_launch *m,int opk,const char *deskt
  if(rc||digest(opk,hash)){int e=errno;free(catalog);errno=e;return -1;}
  rc=gkd_menu_config_select_game(catalog,hash,desktop,exec,argc,argv,&m->profile);free(catalog);
  if(rc<0)return -1;
- struct gkd_menu_vt_config config;unsigned short trigger;
- if(gkd_input_key_code(settings.menu_key,&trigger)||
-    gkd_input_route_compile(settings.input_style,trigger,&m->profile,&config)<0)return -1;
+ struct gkd_menu_vt_config config;unsigned short trigger,brightness;
+ if(gkd_input_key_code(settings.menu_key,&trigger)||gkd_input_key_code(settings.brightness_key,&brightness)||
+    gkd_input_route_compile(settings.input_style,trigger,brightness,&m->profile,&config)<0)return -1;
  int fd=open(GKD_MENU_DEVICE,O_RDWR|O_NONBLOCK|O_CLOEXEC|O_NOFOLLOW);struct stat st;
  if(fd<0)return -1;
  if(fstat(fd,&st)||!S_ISCHR(st.st_mode)||st.st_uid||(st.st_mode&0077)){
@@ -87,7 +83,7 @@ int gkd_app_menu_prepare(struct gkd_app_menu_launch *m,int opk,const char *deskt
  }
  if(ioctl(fd,GKD_MENU_VT_CONFIG,&config)){int e=errno;close(fd);errno=e;return -1;}
  m->fd=fd;
- fprintf(stderr,"GKD_INPUT_SESSION=READY style=%s maps=%u profile=%s action=%s keys=%u auto_open=0\n",gkd_input_style_name(settings.input_style),config.map_count,rc?m->profile.id:"unknown",rc?gkd_menu_action_name(m->profile.action):"disabled",config.count);
+ fprintf(stderr,"GKD_INPUT_SESSION=READY style=%s maps=%u profile=%s action=%s keys=%u\n",gkd_input_style_name(settings.input_style),config.map_count,m->profile.id[0]?m->profile.id:"unknown",gkd_menu_action_name(m->profile.action),config.count);
  return 0;
 }
 int gkd_app_menu_pulse(struct gkd_app_menu_launch *m)

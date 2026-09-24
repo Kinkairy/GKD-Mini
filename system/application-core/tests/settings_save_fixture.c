@@ -93,7 +93,9 @@ static int fake_command(const char *verb,const char *argument,const char *overri
 {
  (void)unused;calls++;
  if(!strcmp(verb,"validate")){
-  assert(!argument&&!strcmp(override,GKD_APP_CONFIG_RUNTIME "/config.override.conf"));
+  assert(!argument);
+  if(strcmp(override,GKD_APP_CONFIG_RUNTIME "/config.override.conf"))
+   assert(!strcmp(read_file(override),old_override));
   snprintf(output,size,"GKD_CONFIG_VALID sha256=%s\n",generation_a);return 0;
  }
  if(!strcmp(verb,"prepare")){
@@ -196,6 +198,49 @@ static void compile_lock_busy(void)
  assert(calls==2);assert_old();
  assert(!rmdir(GKD_APP_CONFIG_CORE_RUN "/.compile-lock"));close(etc);
 }
+static void cli_transactions(void)
+{
+ for(int scenario=0;scenario<6;scenario++){
+  setup();mode=scenario;int etc=etc_fd();char generation[65]={0};
+  write_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf",wanted_override);
+  enum settings_result result=settings_commit(etc,generation_a,NULL,fake_command,NULL,generation);
+  if(scenario==0||scenario==4){
+   assert(result==SETTINGS_SAVED);
+   assert(!strcmp(read_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf"),wanted_override));
+   assert(!strcmp(read_file(GKD_APP_CONFIG_P2 "/gkd-mini/gdkmini.override.conf"),wanted_override));
+   assert(!both_generations(scenario==4?generation_a:generation_b));
+  }else if(scenario==2||scenario==3){
+   assert(result==(scenario==3?SETTINGS_UNKNOWN:SETTINGS_FAILED));
+   assert(!strcmp(read_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf"),old_override));
+   assert(!strcmp(read_file(GKD_APP_CONFIG_P2 "/gkd-mini/gdkmini.override.conf"),old_override));
+   if(scenario==2)assert(!both_generations(generation_a));
+  }else{
+   assert(result==SETTINGS_FAILED);
+   /* Rejected preparation leaves the proposal editable, not effective. */
+   assert(!strcmp(read_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf"),wanted_override));
+   assert(!strcmp(read_file(GKD_APP_CONFIG_P2 "/gkd-mini/gdkmini.override.conf"),old_override));
+   assert(!both_generations(scenario==5?generation_c:generation_a));
+  }
+  close(etc);
+ }
+ /* First CLI save uses the validated embedded baseline, never an empty guess. */
+ for(int failure=0;failure<2;failure++){
+  setup();mode=failure?2:0;int etc=etc_fd();char generation[65]={0};
+  assert(!unlink(GKD_APP_CONFIG_P2 "/gkd-mini/gdkmini.override.conf"));
+  assert(!rmdir(GKD_APP_CONFIG_P2 "/gkd-mini"));
+  write_file(GKD_APP_CONFIG_EMBEDDED,old_override);
+  write_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf",wanted_override);
+  enum settings_result result=settings_commit(etc,generation_a,NULL,fake_command,NULL,generation);
+  assert(result==(failure?SETTINGS_FAILED:SETTINGS_SAVED));
+  if(failure){
+   struct stat st;assert(stat(GKD_APP_CONFIG_P2 "/gkd-mini",&st)<0&&errno==ENOENT);
+   assert(!strcmp(read_file(GKD_APP_CONFIG_RUNTIME "/config.override.conf"),old_override));
+   assert(!both_generations(generation_a));
+  }else assert(!both_generations(generation_b));
+  close(etc);
+ }
+ puts("GKD_CLI_TRANSACTION=PASS shared-commit/prepare-reject/rollback/unknown/concurrent/first-save");
+}
 static void unchanged(void)
 {
  setup();mode=4;int etc=etc_fd();char generation[65];
@@ -207,7 +252,7 @@ static void unchanged(void)
 int main(void)
 {
  assert(geteuid()==0);success();rejected_without_calls();prepare_failure();rollback(0);rollback(1);
- concurrent_change();compile_lock_busy();unchanged();
+ concurrent_change();compile_lock_busy();unchanged();cli_transactions();
  puts("GKD_APP_SETTINGS_SAVE_FIXTURE=PASS sparse/generation/stale/sleep-ladder/cancel-no-call/prepare/rollback/unknown/concurrent/lock/unchanged");
  return 0;
 }

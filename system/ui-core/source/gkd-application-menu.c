@@ -8,6 +8,7 @@
 #include "gkd-settings-state.h"
 #include "gkd-settings-client.h"
 #include "gkd-ui-language.h"
+#include "gkd-controls-command.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -17,7 +18,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 #define POLL_MS 20
@@ -44,7 +47,17 @@ static int snapshot(struct gkd_menu_state *s, unsigned source, int fd, const uns
         if (bits[keys[i] / WORD_BITS] & (1UL << (keys[i] % WORD_BITS))) held |= 1U << i;
     return gkd_menu_state_snapshot(s, source, held);
 }
-static int drain(struct gkd_menu_state *s, unsigned source, int fd, const unsigned short *keys, unsigned key_count, struct gkd_settings_state *settings)
+static int brightness_request(void)
+{
+    struct sockaddr_un address={.sun_family=AF_UNIX};
+    char command=GKD_CONTROLS_COMMAND_BRIGHTNESS;
+    int fd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC|SOCK_NONBLOCK,0),saved;
+    if(fd<0)return -1;
+    strcpy(address.sun_path,GKD_CONTROLS_COMMAND_SOCKET);
+    int result=sendto(fd,&command,1,MSG_NOSIGNAL,(struct sockaddr *)&address,sizeof(address))==1?0:-1;
+    saved=errno;(void)close(fd);errno=saved;return result;
+}
+static int drain(struct gkd_menu_state *s, unsigned source, int fd, const unsigned short *keys, unsigned key_count, struct gkd_settings_state *settings,unsigned held[2])
 {
     struct input_event events[32];
     unsigned batch;
@@ -60,6 +73,7 @@ static int drain(struct gkd_menu_state *s, unsigned source, int fd, const unsign
         for (i = 0; i < (unsigned)(n / (ssize_t)sizeof(events[0])); ++i) {
             struct input_event *e = &events[i]; unsigned k;
             if (e->type == EV_SYN && e->code == SYN_DROPPED) {
+                held[source]=0;
                 if (gkd_menu_state_drop(s, source)) return -1;
             } else if (s->dropped[source]) {
                 if (e->type == EV_SYN && e->code == SYN_REPORT) {
@@ -68,6 +82,13 @@ static int drain(struct gkd_menu_state *s, unsigned source, int fd, const unsign
                     s->dropped[source] = 2U;
                 }
             } else if (e->type == EV_KEY) {
+                if(e->code==KEY_END){
+                    if(e->value==1&&!held[source]){
+                        if(!held[0]&&!held[1]&&brightness_request())return -1;
+                        held[source]=1;
+                    }else if(e->value==0)held[source]=0;
+                    continue;
+                }
                 for (k = 0; k < key_count; ++k) if (e->code == keys[k]) {
                     if ((settings ? gkd_settings_state_key(settings, source, k, e->value) :
                          gkd_menu_state_key(s, source, k, e->value)) < 0) return -1;
@@ -79,14 +100,14 @@ static int drain(struct gkd_menu_state *s, unsigned source, int fd, const unsign
     return 0;
 }
 static int input_cycle(struct gkd_menu_state *s, struct gkd_input_owner *owner,
-                       const unsigned short *keys, unsigned key_count, struct gkd_settings_state *settings, int delay)
+                       const unsigned short *keys, unsigned key_count, struct gkd_settings_state *settings,unsigned held[2],int delay)
 {
     struct pollfd p[2] = {{owner->physical_fd, POLLIN, 0}, {owner->virtual_fd, POLLIN, 0}};
     int ready = poll(p, 2, delay); unsigned i;
     if (ready < 0) return errno == EINTR ? 0 : -1;
     for (i = 0; i < 2U; ++i) {
         if (p[i].revents & (POLLERR | POLLHUP | POLLNVAL)) return -1;
-        if (((p[i].revents & POLLIN) || s->dropped[i] == 2U) && drain(s, i, p[i].fd, keys, key_count, settings)) return -1;
+        if (((p[i].revents & POLLIN) || s->dropped[i] == 2U) && drain(s, i, p[i].fd, keys, key_count, settings,held)) return -1;
     }
     return 0;
 }
@@ -146,7 +167,7 @@ int main(int argc, char **argv)
     struct gkd_menu_state simple,*state=&simple;
     struct gkd_settings_state settings; struct gkd_settings_values values={0},drawn_values={0};
     struct sigaction action; struct stat st;
-    unsigned short keys[6]; unsigned loading_frame=0,transition,seq=0,drawn=99U,i,j,key_count=4U,language=0U,input_style=0U,required=0U;
+    unsigned short keys[6]; unsigned brightness_held[2]={0,0};unsigned loading_frame=0,transition,seq=0,drawn=99U,i,j,key_count=4U,language=0U,input_style=0U,required=0U;
     uint64_t now=0,previous=0,deadline=0,renew=0,hide_until=0,save_next=0;
     uint16_t *pixels=NULL; int fd=-1,result=1,published=0,acquired=0;
     int is_settings=argc>2&&!strcmp(argv[2],"SETTINGS"),is_update=argc>2&&!strcmp(argv[2],"UPDATE"),saving=0,saved=0;
@@ -220,8 +241,8 @@ int main(int argc, char **argv)
     if(fd<0||fstat(fd,&st)||!S_ISCHR(st.st_mode)||gkd_ui_menu_capabilities(fd,&caps)||
        stopped||gkd_input_owner_open_menu(&owner))goto done;
     acquired=1;state->dropped[0]=state->dropped[1]=2U;
-    if(drain(state,0U,owner.physical_fd,keys,key_count,is_settings?&settings:NULL)||
-       drain(state,1U,owner.virtual_fd,keys,key_count,is_settings?&settings:NULL)||now_ms(&now))goto done;
+    if(drain(state,0U,owner.physical_fd,keys,key_count,is_settings?&settings:NULL,brightness_held)||
+       drain(state,1U,owner.virtual_fd,keys,key_count,is_settings?&settings:NULL,brightness_held)||now_ms(&now))goto done;
     previous=now;
     while((!stopped&&state->result==GKD_MENU_PENDING)||saving){
         if(now_ms(&now)||now<previous)goto done;
@@ -271,7 +292,7 @@ int main(int argc, char **argv)
             if(!published){printf("GKD_MENU_READY kind=%s\n",argv[2]);if(fflush(stdout))goto done;}
             published=1;drawn=state->selected;if(is_settings)drawn_values=settings.draft;renew=now+(saving?config.loading_interval_ms:RENEW_MS);
         }
-        if(input_cycle(state,&owner,keys,key_count,is_settings?&settings:NULL,POLL_MS))goto done;
+        if(input_cycle(state,&owner,keys,key_count,is_settings?&settings:NULL,brightness_held,POLL_MS))goto done;
         if(is_settings&&!saving&&state->result==GKD_MENU_SELECTED&&!stopped){
             snprintf(request,sizeof(request),"settings-save %s %u %u %u %u %u",expected,
                 settings.draft.animation,settings.draft.sleep_minutes,settings.draft.show_fps,settings.draft.chinese,settings.draft.input_style);
@@ -294,7 +315,7 @@ int main(int argc, char **argv)
             previous=now;
             if(now>=hide_until&&!(state->held[0]|state->held[1]|state->dropped[0]|state->dropped[1]))break;
             if(now>=deadline&&!is_settings){state->result=GKD_MENU_CANCELLED;break;}
-            if(input_cycle(state,&owner,keys,key_count,is_settings?&settings:NULL,POLL_MS))goto done;
+            if(input_cycle(state,&owner,keys,key_count,is_settings?&settings:NULL,brightness_held,POLL_MS))goto done;
         }
         if(gkd_ui_menu_clear(fd))goto done;
         published=0;

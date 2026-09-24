@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#include "gkd-app-storage.h"
 
 #ifndef GKD_APP_MEDIA_PROC
 #define GKD_APP_MEDIA_PROC "/proc"
@@ -286,7 +287,9 @@ static int view_action(struct gkd_app_media *m,unsigned index,enum media_action 
    else if(action==MEDIA_MOUNT){
     if(result.present!=0)result.error=EINVAL;
     else if(mount(GKD_APP_MEDIA_SOURCE,GKD_APP_MEDIA_TARGET,GKD_APP_MEDIA_TYPE,GKD_APP_MEDIA_FLAGS,GKD_APP_MEDIA_DATA))result.error=errno;
-    else if(mounted_target(v)!=1)result.error=errno?errno:EIO;else result.result=0;
+    else if(mounted_target(v)!=1)result.error=errno?errno:EIO;else {
+     (void)gkd_storage_preferences("");result.result=0;
+    }
    }else{
     if(result.present!=1)result.error=EINVAL;
     else if(umount2(GKD_APP_MEDIA_TARGET,0))result.error=errno;
