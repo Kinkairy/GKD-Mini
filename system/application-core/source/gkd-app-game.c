@@ -134,6 +134,7 @@ static int run_inside(int do_exit, unsigned long long init_starttime)
     struct game_target target; int idle;
     if (registered_game(&target, &idle)) return fail("registry");
     if (idle) {
+        if(do_exit==3){struct gkd_game_orientation s=GKD_GAME_ORIENTATION_INIT;gkd_game_orientation_print(&s,0);return ferror(stdout)?fail("stdout"):0;}
         if (do_exit) { errno = ENOENT; return fail("idle"); }
         if (puts("IDLE") == EOF) return fail("stdout");
         return 0;
@@ -150,21 +151,23 @@ static int run_inside(int do_exit, unsigned long long init_starttime)
     if (gkd_app_process_identity_read(target.pid, &identity) || identity.starttime != target.starttime) {
         close(game_fd); errno = ESRCH; return fail("native-game-race");
     }
-    int request_result = gkd_app_game_request_operation(target.pid, target.starttime, game_fd,
+    struct gkd_game_orientation orientation=GKD_GAME_ORIENTATION_INIT;
+    int request_result = do_exit==3?gkd_app_game_request_orientation(target.pid,target.starttime,game_fd,&orientation):gkd_app_game_request_operation(target.pid, target.starttime, game_fd,
         do_exit==2?GKD_GAME_MENU:GKD_GAME_EXIT);
     int request_error = errno; close(game_fd); errno = request_error;
     if (request_result) return fail("native-exit-request");
+    if(do_exit==3){gkd_game_orientation_print(&orientation,1);return ferror(stdout)?fail("stdout"):0;}
     if (puts(do_exit==2?"MENU_DELIVERED":"EXITED") == EOF) return fail("stdout");
     return 0;
 }
 int gkd_app_game_main(int argc, char **argv)
 {
     pid_t host, init; int do_exit;
-    if (geteuid() || argc != 4 || (strcmp(argv[1], "check") && strcmp(argv[1], "exit") && strcmp(argv[1], "menu")) ||
+    if (geteuid() || argc != 4 || (strcmp(argv[1], "check") && strcmp(argv[1], "exit") && strcmp(argv[1], "menu") && strcmp(argv[1], "orientation")) ||
         !parse_pid(argv[2], &host) || !parse_pid(argv[3], &init) || host == init) {
         errno = EINVAL; fail("arguments"); return 64;
     }
-    do_exit = !strcmp(argv[1], "menu")?2:!strcmp(argv[1], "exit"); struct gkd_app_namespace_pin target;
+    do_exit = !strcmp(argv[1],"orientation")?3:!strcmp(argv[1], "menu")?2:!strcmp(argv[1], "exit"); struct gkd_app_namespace_pin target;
     gkd_app_namespace_pin_init(&target);
     if (gkd_app_namespace_pin_open(&target, host, init)) { fail("namespace"); return 65; }
     if (setns(target.pidns_fd, CLONE_NEWPID) || setns(target.mntns_fd, CLONE_NEWNS) ||

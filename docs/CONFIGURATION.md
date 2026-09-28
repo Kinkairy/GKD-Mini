@@ -13,3 +13,5 @@
 游戏卡缺失时显示系统全屏提示，普通确认/取消/MENU 不能关闭；电源菜单仍可使用。USB STORAGE 导出会由系统协调卸载/占用，不能把正常导出状态当作物理拔卡。
 
 卡健康检测已经取消，没有对应的健康评分或开关。
+
+可信竖屏识别覆盖 FBA44、FBN-ex、Handy 和 Oswan；未知方向保留基础按键。`input-routing.conf` 中的 `portrait.map.x=original-a` 让实体 X 提供当前布局的原 A 功能，点键/A 共用输入源则映射当前 Y 并支持按住连发。松手停止，退出游戏回 SimpleMenu 后取消竖屏路由。可用 `portrait.map.<物理键>=original-a`、`current-y`、`KEY_*` 或 `disabled` 修改可信竖屏路由；完整且受信任的用户覆盖在下一次游戏启动读取。硬件共码的点键与 A 无法分别识别。

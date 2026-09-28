@@ -103,13 +103,25 @@ static int source_key(const char *text,unsigned short *code)
   if(!strcmp(text,names[i].name)){*code=names[i].code;return 0;}
  return -1;
 }
-static int mapping(const char *name,char *value,struct gkd_menu_profile *p)
+static int mapping(const char *name,char *value,struct gkd_menu_profile *p,int portrait)
 {
- unsigned short source;struct gkd_menu_profile target={0};
- if(source_key(name,&source)||p->map_count==GKD_INPUT_ROUTE_MAPS)return -1;
- for(unsigned i=0;i<p->map_count;i++)if(p->maps[i].source==source)return -1;
- if(strcmp(value,"disabled")&&(keys(value,&target)||target.key_count!=1))return -1;
- p->maps[p->map_count++]=(struct gkd_input_route_map){source,target.keys[0]};
+ unsigned short source,output=0;struct gkd_menu_profile target={0};
+ /* Legacy map.x/y follow old board labels. Portrait names follow the
+  * production input_map_x=SPACE and input_map_y=LEFTSHIFT settings. */
+ if(portrait&&!strcmp(name,"x"))source=KEY_SPACE;
+ else if(portrait&&!strcmp(name,"y"))source=KEY_LEFTSHIFT;
+ else if(source_key(name,&source))return -1;
+ unsigned *count=portrait?&p->portrait_map_count:&p->map_count;
+ struct gkd_input_route_map *maps=portrait?p->portrait_maps:p->maps;
+ if(*count==GKD_INPUT_ROUTE_MAPS)return -1;
+ for(unsigned i=0;i<*count;i++)if(maps[i].source==source)return -1;
+ if(portrait&&!strcmp(value,"original-a"))output=GKD_PORTRAIT_ORIGINAL_A;
+ else if(portrait&&!strcmp(value,"current-y"))output=GKD_PORTRAIT_CURRENT_Y;
+ else if(strcmp(value,"disabled")){
+  if(keys(value,&target)||target.key_count!=1)return -1;
+  output=target.keys[0];
+ }
+ maps[(*count)++]=(struct gkd_input_route_map){source,output};
  return 0;
 }
 static int complete(const struct gkd_menu_config *c,unsigned seen)
@@ -159,7 +171,8 @@ int gkd_menu_config_parse(const char *data,size_t bytes,struct gkd_menu_config *
             version=(unsigned)(value[0]-'0');continue;
         }
         struct gkd_menu_profile *p=&c->profiles[c->count-1U];unsigned bit;
-        if(version==2U&&!strncmp(key,"map.",4)){if(mapping(key+4,value,p))goto invalid;continue;}
+        if(version==2U&&!strncmp(key,"portrait.map.",13)){if(mapping(key+13,value,p,1))goto invalid;continue;}
+        if(version==2U&&!strncmp(key,"map.",4)){if(mapping(key+4,value,p,0))goto invalid;continue;}
         if(!strcmp(key,"opk_sha256"))bit=1U;
         else if(!strcmp(key,"desktop"))bit=2U;
         else if(!strcmp(key,"exec"))bit=4U;
@@ -280,6 +293,15 @@ int gkd_menu_config_select_game(const struct gkd_menu_config *c,const char *hash
     if(at==GKD_INPUT_ROUTE_MAPS){memset(out,0,sizeof(*out));errno=E2BIG;return -1;}
     merged.maps[at]=p->maps[k];if(at==merged.map_count)merged.map_count++;
    }
+   merged.portrait_map_count=out->portrait_map_count;
+   memcpy(merged.portrait_maps,out->portrait_maps,sizeof(merged.portrait_maps));
+   for(unsigned k=0;k<p->portrait_map_count;k++){
+    unsigned at;
+    for(at=0;at<merged.portrait_map_count;at++)if(merged.portrait_maps[at].source==p->portrait_maps[k].source)break;
+    if(at==GKD_INPUT_ROUTE_MAPS){memset(out,0,sizeof(*out));errno=E2BIG;return -1;}
+    merged.portrait_maps[at]=p->portrait_maps[k];
+    if(at==merged.portrait_map_count)merged.portrait_map_count++;
+   }
    *out=merged;
   }
  }
@@ -297,7 +319,7 @@ int gkd_input_route_compile(unsigned style,unsigned short trigger,unsigned short
 {
  if(!out||!p||style>=GKD_INPUT_STYLE_COUNT||!trigger||trigger>KEY_MAX||
     !brightness||brightness>KEY_MAX||brightness==trigger||
-    p->map_count>GKD_INPUT_ROUTE_MAPS||p->key_count>GKD_MENU_CHORD_MAX){errno=EINVAL;return -1;}
+    p->map_count>GKD_INPUT_ROUTE_MAPS||p->portrait_map_count>GKD_INPUT_ROUTE_MAPS||p->key_count>GKD_MENU_CHORD_MAX){errno=EINVAL;return -1;}
  memset(out,0,sizeof(*out));
  out->version=GKD_MENU_VT_VERSION;out->hold_ms=100;
  /* Every style reserves the physical MENU key for the selected emulator
@@ -317,4 +339,33 @@ int gkd_input_route_compile(unsigned style,unsigned short trigger,unsigned short
   out->count=p->key_count;out->hold_ms=p->hold_ms;memcpy(out->keys,p->keys,sizeof(out->keys));
  }
  return 1;
+}
+
+int gkd_input_route_portrait(const struct gkd_menu_vt_config *base,const struct gkd_menu_profile *profile,struct gkd_menu_vt_config *out)
+{
+ if(!base||!profile||!out||base->version!=GKD_MENU_VT_VERSION||base->map_count>GKD_INPUT_ROUTE_MAPS||
+    profile->portrait_map_count>GKD_INPUT_ROUTE_MAPS){errno=EINVAL;return -1;}
+ if(base->trigger==KEY_LEFTCTRL||base->trigger==KEY_LEFTSHIFT){errno=EOPNOTSUPP;return -1;}
+ unsigned short current_y=KEY_LEFTSHIFT,original_a=KEY_LEFTCTRL;
+ for(unsigned i=0;i<base->map_count;i++){
+  if(base->maps[i].source==KEY_LEFTSHIFT)current_y=base->maps[i].target;
+  if(base->maps[i].source==KEY_LEFTCTRL)original_a=base->maps[i].target;
+ }
+ if(!current_y||!original_a){errno=EOPNOTSUPP;return -1;}
+ struct gkd_menu_vt_config next=*base;
+ /* The side dot and A share LEFTCTRL; this is the generic portrait rule. */
+ if(add_map(&next,KEY_LEFTCTRL,current_y))return -1;
+ for(unsigned i=0;i<profile->portrait_map_count;i++){
+  unsigned short source=profile->portrait_maps[i].source;
+  unsigned short target=profile->portrait_maps[i].target;
+  if(!source||source>KEY_MAX||source==base->trigger){errno=EOPNOTSUPP;return -1;}
+  for(unsigned j=0;j<base->map_count;j++)
+   if(base->maps[j].source==source&&!base->maps[j].target){errno=EOPNOTSUPP;return -1;}
+  if(target==GKD_PORTRAIT_ORIGINAL_A)target=original_a;
+  else if(target==GKD_PORTRAIT_CURRENT_Y)target=current_y;
+  else if(target>KEY_MAX){errno=EOPNOTSUPP;return -1;}
+  if(source==KEY_LEFTCTRL&&!target){errno=EOPNOTSUPP;return -1;}
+  if(add_map(&next,source,target))return -1;
+ }
+ *out=next;return 0;
 }

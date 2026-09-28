@@ -38,6 +38,7 @@ void gkd_app_fps_launch_close(struct gkd_app_fps_launch *x)
     if(x->executable_fd>=0)close(x->executable_fd);
     if(x->counter_fd>=0)close(x->counter_fd);
     if(x->lifetime_fd>=0)close(x->lifetime_fd);
+    if(x->orientation_fd>=0)close(x->orientation_fd);
     free(x->preload);gkd_app_fps_launch_init(x);
 }
 static int random_session(unsigned char value[16])
@@ -104,11 +105,13 @@ static char *preload_value(const char *existing)
     if(b){value[a++]=':';memcpy(value+a,existing,b);a+=b;}
     value[a]=0;return value;
 }
-int gkd_app_fps_launch_prepare(struct gkd_app_fps_launch *out,const char *name,
-                               const char *directory,const char *existing)
+int gkd_app_fps_launch_prepare_orientation(struct gkd_app_fps_launch *out,const char *name,
+                               const char *directory,const char *existing,int orientation,int *lifetime)
 {
     if(!out||!name||!*name||!directory||directory[0]!='/'){errno=EINVAL;return -1;}
     gkd_app_fps_launch_init(out);
+    if(lifetime)*lifetime=-1;
+    if(orientation>=3&&!lifetime){errno=EINVAL;return -1;}
     int producer=-1,reader=-1,pipefd[2]={-1,-1},executable=-1,working=-1;
     void *mapping=MAP_FAILED;
     unsigned char session[16];char packet[FPS_PACKET_BYTES+1],path[64];
@@ -131,8 +134,8 @@ int gkd_app_fps_launch_prepare(struct gkd_app_fps_launch *out,const char *name,
      * avoiding ELF reads and hashing on the highest-priority launch path. */
     packet[44]=' ';packet[45]='1';packet[46]=10;packet[47]=0;
     int inject=exchange(packet,reader,pipefd[0]),eligible=0;
-    close(reader);reader=-1;close(pipefd[0]);pipefd[0]=-1;
-    if(inject){
+    close(reader);reader=-1;
+    if(inject||orientation>=3){
         working=open(directory,O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
         if(working>=0)executable=open_exec(name,working);
         struct gkd_app_fps_gate_paths paths={"/usr/lib/libSDL-1.2.so.0",
@@ -143,10 +146,13 @@ int gkd_app_fps_launch_prepare(struct gkd_app_fps_launch *out,const char *name,
         if(working>=0){close(working);working=-1;}
     }
     munmap(mapping,GKD_FPS_COUNTER_BYTES);mapping=MAP_FAILED;
-    if(inject&&eligible){
+    if((inject||orientation>=3)&&eligible){
         char *preload=preload_value(existing);if(!preload)goto unavailable;
+        if(orientation>=3){out->orientation_fd=fcntl(orientation,F_DUPFD_CLOEXEC,3);
+            if(out->orientation_fd<0){free(preload);goto unavailable;}}
         out->executable_fd=executable;executable=-1;out->counter_fd=producer;producer=-1;
         out->lifetime_fd=pipefd[1];pipefd[1]=-1;out->preload=preload;
+        if(orientation>=3){*lifetime=pipefd[0];pipefd[0]=-1;}
         memcpy(out->session,packet+12,32);out->session[32]=0;
     }
 unavailable:{int saved=errno;
@@ -161,3 +167,6 @@ unavailable:{int saved=errno;
     return 0;
     }
 }
+
+int gkd_app_fps_launch_prepare(struct gkd_app_fps_launch *out,const char *name,const char *directory,const char *existing)
+{return gkd_app_fps_launch_prepare_orientation(out,name,directory,existing,-1,NULL);}

@@ -7,7 +7,7 @@ out=Path(sys.argv[1])
 if out.exists() or out.parent!=Path('/tmp/gkd-mini-public') or not out.name.startswith('gkd-input-route-test-'):raise SystemExit('new NUC temporary output required')
 out.mkdir(mode=0o700)
 source=(root/'kernel/current/menu/gkd-menu-vt.inc').read_text()
-blocks=[('static bool gkd_menu_target','static enum hrtimer_restart'),('static long gkd_menu_ioctl_locked','static long gkd_menu_ioctl('),('static int gkd_menu_release','static const struct file_operations'),('static long gkd_system_ioctl','static const struct file_operations gkd_system_fops')]
+blocks=[('static bool gkd_menu_target','static int gkd_menu_open'),('static long gkd_menu_ioctl_locked','static long gkd_menu_ioctl('),('static int gkd_menu_release','static const struct file_operations'),('static long gkd_system_ioctl','static const struct file_operations gkd_system_fops')]
 extracted='\n'.join(source[source.index(a):source.index(b)] for a,b in blocks)
 (out/'input-route-extracted.inc').write_text(extracted)
 image='local/c-builder:2026.08.02-kernel'

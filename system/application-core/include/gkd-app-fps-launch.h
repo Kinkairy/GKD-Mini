@@ -5,11 +5,12 @@
 #define GKD_APP_FPS_INTERPOSER "/var/run/gkd-app/libgkd-fps-present.so"
 #endif
 struct gkd_app_fps_launch {
-    int executable_fd, counter_fd, lifetime_fd;
+    int executable_fd, counter_fd, lifetime_fd, orientation_fd;
     char session[33];
     char *preload;
 };
-#define GKD_APP_FPS_LAUNCH_INIT {.executable_fd=-1,.counter_fd=-1,.lifetime_fd=-1}
+#define GKD_APP_FPS_LAUNCH_INIT {.executable_fd=-1,.counter_fd=-1,.lifetime_fd=-1,.orientation_fd=-1}
+int gkd_app_fps_launch_prepare_orientation(struct gkd_app_fps_launch *,const char *,const char *,const char *,int,int *);
 void gkd_app_fps_launch_init(struct gkd_app_fps_launch *);
 void gkd_app_fps_launch_close(struct gkd_app_fps_launch *);
 /* Best-effort FPS setup. Valid API calls return zero even when collection is

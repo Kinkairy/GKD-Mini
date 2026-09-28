@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #define _GNU_SOURCE
 #include "gkd-fps-counter.h"
+#include "gkd-game-orientation.h"
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -16,6 +17,46 @@
 static struct gkd_fps_counter_page *counter_page;
 static int lifetime_fd = -1;
 static int (*original_flip)(void *);
+static struct gkd_orientation_page *orientation_page;
+static unsigned int *burn_active,*burn_count;
+static unsigned int (*burn_flags)(void);
+static char *(*burn_name)(unsigned int);
+
+/* The launcher only enables this for the two hash-pinned arcade OPKs. No
+ * process-memory offsets, framebuffer heuristics or mutable game configuration. */
+static void orientation_attach(int fd)
+{
+    struct stat st;void *map;
+    if(fd<3)return;
+    if(!counter_page||fstat(fd,&st)||!S_ISREG(st.st_mode)||st.st_size!=(off_t)sizeof(struct gkd_orientation_page))goto done;
+    int seals=fcntl(fd,F_GET_SEALS);
+    if(seals<0||(seals&(F_SEAL_SHRINK|F_SEAL_GROW))!=(F_SEAL_SHRINK|F_SEAL_GROW))goto done;
+    map=mmap(NULL,sizeof(struct gkd_orientation_page),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+    if(map==MAP_FAILED)goto done;
+    struct gkd_orientation_page *p=map;
+    if(p->magic!=GKD_ORIENTATION_MAGIC||p->version!=1||p->aspect||p->reserved||
+       !p->driver[0]||!memchr(p->driver,0,sizeof(p->driver)))goto bad;
+    burn_active=dlsym(RTLD_DEFAULT,"nBurnDrvActive");
+    burn_count=dlsym(RTLD_DEFAULT,"nBurnDrvCount");
+    burn_flags=(unsigned int (*)(void))dlsym(RTLD_DEFAULT,"BurnDrvGetFlags");
+    burn_name=(char *(*)(unsigned int))dlsym(RTLD_DEFAULT,"BurnDrvGetTextA");
+    if(!burn_active||!burn_count||!burn_flags||!burn_name)goto bad;
+    orientation_page=p;goto done;
+bad:munmap(map,sizeof(struct gkd_orientation_page));
+done:close(fd);
+}
+static void orientation_present(void)
+{
+    if(!orientation_page)return;
+    unsigned aspect=0;
+    if(*burn_count>0&&*burn_count<=100000&&*burn_active<*burn_count){
+        const char *name=burn_name(0); /* DRV_NAME */
+        if(name&&!strncmp(name,orientation_page->driver,sizeof(orientation_page->driver)))
+            aspect=(burn_flags()&4U)?GKD_ASPECT_PORTRAIT:GKD_ASPECT_LANDSCAPE;
+    }
+    __atomic_store_n(&orientation_page->aspect,aspect,__ATOMIC_RELEASE);
+}
+
 
 static int fd_number(const char *value)
 {
@@ -127,6 +168,7 @@ static int write_pipe(int fd)
 static void after_fork_child(void)
 {
     counter_page = NULL;
+    orientation_page = NULL;
     if (lifetime_fd >= 0) (void)close(lifetime_fd);
     lifetime_fd = -1;
 }
@@ -134,6 +176,8 @@ static void after_fork_child(void)
 __attribute__((constructor)) static void fps_present_init(void)
 {
     int saved = errno;
+    int orientation = fd_number(getenv(GKD_ORIENTATION_FD_ENV));
+    (void)unsetenv(GKD_ORIENTATION_FD_ENV);
     int fd = fd_number(getenv(GKD_FPS_COUNTER_FD_ENV));
     int life = fd_number(getenv(GKD_FPS_LIFETIME_FD_ENV));
     uint64_t hi = 0, lo = 0;
@@ -175,6 +219,7 @@ __attribute__((constructor)) static void fps_present_init(void)
             (void)munmap(mapping, GKD_FPS_COUNTER_BYTES);
         }
     }
+    if(orientation>=3&&orientation!=fd&&orientation!=life&&orientation!=lifetime_fd)orientation_attach(orientation);
     if (fd >= 3) (void)close(fd);
     if (life >= 3) (void)close(life);
     errno = saved;
@@ -182,6 +227,7 @@ __attribute__((constructor)) static void fps_present_init(void)
 
 __attribute__((destructor)) static void fps_present_done(void)
 {
+    if(orientation_page){__atomic_store_n(&orientation_page->aspect,0U,__ATOMIC_RELEASE);munmap(orientation_page,sizeof(*orientation_page));orientation_page=NULL;}
     if (lifetime_fd >= 0) (void)close(lifetime_fd);
     lifetime_fd = -1;
     counter_page = NULL;
@@ -196,6 +242,7 @@ __attribute__((visibility("default"))) int SDL_Flip(void *surface)
     if (result == 0 && counter_page)
         (void)__atomic_fetch_add(&counter_page->successful_flips, 1U,
                                  __ATOMIC_RELAXED);
+    if(result==0)orientation_present();
     errno = saved;
     return result;
 }

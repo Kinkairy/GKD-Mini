@@ -1,8 +1,8 @@
-# GKD Mini — RC3.6
+# GKD Mini — RC3.7
 
 面向 **原版 GKD Mini（Ingenic X1830 / GKD350）** 的 Linux 6.1.28 系统项目。当前使用 SimpleMenu 作为游戏前端。**不支持 GKD Mini Plus。**
 
-这是 RC3.6 的公开源码快照，包含系统服务、共享 UI、内核补丁、构建脚本和测试。首次公开仓采用独立历史；版本号对应已在原版 GKD Mini 上验收的 RC3.6 F 版功能基线。公开树进行了构建路径规范化，不能据此声称与已安装固件逐字节一致。
+这是 RC3.7 的公开源码快照，包含系统服务、共享 UI、内核补丁、构建脚本和测试。公开仓采用独立历史；本次源码对应已在原版 GKD Mini 上验证的 RC3.7 方向识别与配置化路由。公开树进行了构建路径规范化，不能据此声称与已安装固件逐字节一致。
 
 **当前不提供固件下载或空白卡镜像。** 完整固件构建依赖未随仓库分发的原机用户态输入、工具链及启动图片，详见[构建说明](docs/BUILDING.md)。
 
@@ -10,6 +10,7 @@
 
 - A 日常环境与独立 R 恢复环境，签名系统更新及恢复流程。
 - 游戏启动/退出与进程生命周期管理；原始、Xbox、PlayStation 输入方案及按应用配置的原生菜单路由。
+- 可信竖屏识别、按住点键连发，以及配置化 X→原 A；横屏、未知方向和回到前端恢复基础路由。
 - 共用设置、电源、USB 菜单、确认文本页、滚动条、OSD 和旋转 loading。
 - 截图、音量/亮度设置、自动休眠、低电量提示和保护。
 - 游戏卡插拔提示、USB STORAGE/DEBUG 切换和等待状态。
@@ -25,9 +26,9 @@
 
 Linux 6.1.28 system software for the **original GKD Mini (X1830 / GKD350)**, with SimpleMenu as the current frontend. GKD Mini Plus is not supported.
 
-RC3.6 provides application lifecycle management, configurable input routing, shared menus/OSD/loading, screenshots, USB mode management, power handling, and signed A/R system updates. This repository publishes source, patches and tests. It does **not** distribute a firmware image, ROMs, BIOS files, emulator packages, recovery images or signing keys.
+RC3.7 provides application lifecycle management, configurable input routing, shared menus/OSD/loading, screenshots, USB mode management, power handling, and signed A/R system updates. This repository publishes source, patches and tests. It does **not** distribute a firmware image, ROMs, BIOS files, emulator packages, recovery images or signing keys.
 
-The public snapshot normalizes build-host paths and omits an unreviewed boot image. Full firmware reproduction still requires external inputs; see [BUILDING](docs/BUILDING.md). Existing hardware acceptance applies to the RC3.6 F firmware, not a separately built public image. See [STATUS](docs/STATUS.md) for verified behavior and remaining work.
+The public snapshot normalizes build-host paths and omits an unreviewed boot image. Full firmware reproduction still requires external inputs; see [BUILDING](docs/BUILDING.md). Existing hardware acceptance applies to the RC3.7 firmware, not a separately built public image. See [STATUS](docs/STATUS.md) for verified behavior and remaining work.
 
 ## License
 

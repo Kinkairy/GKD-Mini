@@ -77,13 +77,14 @@ int main(int argc,char **argv)
     }
     /* Version 2: exact game identity, physical aliases and frozen schemes. */
     const char v2[]="version=2\n[core]\nopk_sha256=" HASH
-      "\ndesktop=default.gcw0.desktop\nexec=PocketSNES\naction=native\nmap.l1=59\n"
+      "\ndesktop=default.gcw0.desktop\nexec=PocketSNES\naction=native\nmap.l1=59\nportrait.map.x=original-a\n"
       "[game]\nopk_sha256=" HASH "\ndesktop=default.gcw0.desktop\nexec=PocketSNES\naction=native\n"
-      "rom=/media/sdcard/roms/Beat Em Up.sfc\nmap.side_dot=KEY_SPACE\n";
+      "rom=/media/sdcard/roms/Beat Em Up.sfc\nmap.side_dot=KEY_SPACE\nportrait.map.x=current-y\n";
     parse(v2,1);
     char *game[]={"/media/sdcard/roms/Beat Em Up.sfc"};
     assert(gkd_menu_config_select_game(actual,HASH,"default.gcw0.desktop","PocketSNES",1,game,&selected)==1);
-    assert(!strcmp(selected.id,"game")&&selected.map_count==2);
+    assert(!strcmp(selected.id,"game")&&selected.map_count==2&&selected.portrait_map_count==1&&
+           selected.portrait_maps[0].source==KEY_SPACE&&selected.portrait_maps[0].target==GKD_PORTRAIT_CURRENT_Y);
     struct gkd_menu_vt_config route;
     assert(gkd_input_route_compile(0,102,KEY_END,&selected,&route)==1&&
            route.version==GKD_MENU_VT_VERSION&&route.trigger==KEY_HOME&&
@@ -106,14 +107,29 @@ int main(int argc,char **argv)
     assert(gkd_input_route_compile(3,102,KEY_END,&selected,&route)<0);
     assert(gkd_input_route_compile(0,102,102,&selected,&route)<0);
     assert(gkd_menu_config_select_game(actual,HASH,"default.gcw0.desktop","PocketSNES",0,NULL,&selected)==1);
-    assert(!strcmp(selected.id,"core")&&selected.map_count==1);
+    assert(!strcmp(selected.id,"core")&&selected.map_count==1&&selected.portrait_map_count==1&&
+           selected.portrait_maps[0].source==KEY_SPACE&&selected.portrait_maps[0].target==GKD_PORTRAIT_ORIGINAL_A);
     char invalid_v2[4096];snprintf(invalid_v2,sizeof(invalid_v2),"%smap.a=KEY_ENTER\n",v2);parse(invalid_v2,0);
     snprintf(invalid_v2,sizeof(invalid_v2),"%smap.side_double_dot=KEY_F1+KEY_F2\n",v2);parse(invalid_v2,0);
     snprintf(invalid_v2,sizeof(invalid_v2),"%smap.unknown=KEY_ENTER\n",v2);parse(invalid_v2,0);
+    snprintf(invalid_v2,sizeof(invalid_v2),"%sportrait.map.x=original-a\n",v2);parse(invalid_v2,0);
+    snprintf(invalid_v2,sizeof(invalid_v2),"%sportrait.map.unknown=KEY_ENTER\n",v2);parse(invalid_v2,0);
+    snprintf(invalid_v2,sizeof(invalid_v2),"%sportrait.map.y=bad-target\n",v2);parse(invalid_v2,0);
     snprintf(invalid_v2,sizeof(invalid_v2),"%srom=/media/sdcard/../other\n",v2);parse(invalid_v2,0);
     puts("GKD_INPUT_CONFIG_TEST=PASS raw/xbox/ps/game-path/inheritance/side-dot-alias/conflict/invalid");
     /* Real file loader and complete audited catalog. */
     assert(!gkd_menu_config_load(argv[1],actual,NULL));assert(actual->count==28);
+    unsigned portrait_profiles=0;
+    for(unsigned i=0;i<actual->count;i++){
+     const char *id=actual->profiles[i].id;
+     if(!strcmp(id,"fba44")||!strcmp(id,"fbn-ex")||!strcmp(id,"handy")||!strcmp(id,"oswan")){
+      assert(actual->profiles[i].portrait_map_count==1);
+      assert(actual->profiles[i].portrait_maps[0].source==KEY_SPACE);
+      assert(actual->profiles[i].portrait_maps[0].target==GKD_PORTRAIT_ORIGINAL_A);
+      portrait_profiles++;
+     }
+    }
+    assert(portrait_profiles==4);
     unsigned counts[4]={0};for(unsigned i=0;i<actual->count;i++)counts[actual->profiles[i].action]++;
     assert(counts[GKD_MENU_NATIVE]==17&&counts[GKD_MENU_CHORD]==8&&counts[GKD_MENU_DISABLED]==2&&counts[GKD_MENU_NONE]==1);
     assert(gkd_menu_config_select_game(actual,"a97a8775d905bc4d6dca69dd907751537a6f36ce329bed74b5c73f96b9876377",

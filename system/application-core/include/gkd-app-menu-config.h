@@ -6,6 +6,8 @@
 #define GKD_MENU_PROFILE_MAX 128U
 #define GKD_MENU_CHORD_MAX 4U
 #define GKD_MENU_CONFIG_BYTES 65536U
+#define GKD_PORTRAIT_ORIGINAL_A 65534U
+#define GKD_PORTRAIT_CURRENT_Y 65535U
 /* No wildcard, shell command, path discovery or emulator settings mutation. */
 enum gkd_menu_action { GKD_MENU_DISABLED, GKD_MENU_NATIVE, GKD_MENU_CHORD, GKD_MENU_NONE };
 struct gkd_menu_profile {
@@ -16,6 +18,8 @@ struct gkd_menu_profile {
     char rom[512]; /* Optional exact absolute ROM argument; no globs. */
     unsigned map_count;
     struct gkd_input_route_map maps[GKD_INPUT_ROUTE_MAPS];
+    unsigned portrait_map_count;
+    struct gkd_input_route_map portrait_maps[GKD_INPUT_ROUTE_MAPS];
 };
 struct gkd_menu_config {
     unsigned version, count;
@@ -38,6 +42,8 @@ int gkd_menu_config_select_game(const struct gkd_menu_config *, const char *, co
                                 const char *, int, char *const [], struct gkd_menu_profile *);
 /* Every style keeps the hardware brightness key out of emulator VT input.
  * Raw keeps the other keys unchanged, including the native MENU key. */
+/* Derive dot/A from the current physical Y output; do not change the base. */
+int gkd_input_route_portrait(const struct gkd_menu_vt_config *,const struct gkd_menu_profile *,struct gkd_menu_vt_config *);
 int gkd_input_route_compile(unsigned, unsigned short, unsigned short,
                             const struct gkd_menu_profile *, struct gkd_menu_vt_config *);
 const char *gkd_menu_action_name(enum gkd_menu_action);

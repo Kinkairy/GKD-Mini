@@ -3,8 +3,8 @@
   "source_r": "1fbf203de7cfa0d62cda56d735314e451c25d44a",
   "source_a": "ea9681d8afb44a65dde4fb7a116999c350bd12c4",
   "opk_path": "/media/data/apps/SimpleMenu-OD-v1.1.opk",
-  "opk_sha256": "5017c77c4cd10fc4daf6c26cfe434f91bf53bb76bc33ce4f22bd3a93a626833b",
-  "sm_sha256": "e4373a1d0ebe4e4474b5b9aa4a753425eb3ec106e05c38b870a5e726608a17e8",
+  "opk_sha256": "6154322314528f4c4cd6dbc4c847f7fc2123bd4453e02e736dce96a455211c21",
+  "sm_sha256": "ed4bfea0f7c9e65e471a551015783b2c6b652a0415444d3a4f1ee5705471b1b7",
   "dependencies": [
     {
       "path": "/lib/ld-uClibc.so.0",

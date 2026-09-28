@@ -9,4 +9,4 @@
 - `system/gkd-card-writer/`: card-package and Windows writer source; a public blank-card workflow is not yet accepted.
 - `build/`, `tools/`: pinned input declarations, build wrappers and host tests.
 
-Historical directory names such as `rc33` and `rc34` identify module lineage, not additional supported firmware releases. RC3.6 is the current accepted baseline. The current frontend is SimpleMenu; a replacement frontend and independent frontend upgrades remain future work.
+Historical directory names such as `rc33` and `rc34` identify module lineage, not additional supported firmware releases. RC3.7 is the current accepted baseline. The current frontend is SimpleMenu; a replacement frontend and independent frontend upgrades remain future work.

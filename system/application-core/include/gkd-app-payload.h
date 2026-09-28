@@ -4,6 +4,9 @@
 #include <signal.h>
 struct gkd_app_fps_launch;
 struct gkd_app_menu_launch;
+struct gkd_app_orientation;
+struct gkd_app_payload_result;
+int gkd_app_payload_run_orientation(char *const [],const char *,int,unsigned long long,volatile sig_atomic_t *,struct gkd_app_fps_launch *,struct gkd_app_menu_launch *,struct gkd_app_orientation *,struct gkd_app_payload_result *);
 struct gkd_app_payload_result { int wait_status, client, forced, reaped; };
 /* A fully populated fps argument transfers its three fds to the new namespace
  * on successful clone; the structure is reset before this blocking call waits. */

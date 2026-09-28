@@ -24,4 +24,15 @@ struct gkd_system_hotkey_config {
     __u16 prefix, button;
 };
 #define GKD_SYSTEM_HOTKEY_CONFIG _IOW('G', 0xe3, struct gkd_system_hotkey_config)
+/* Atomically replace only the game maps on the existing lease. Busy holds
+ * and MENU receipts must drain first; close still restores native routing. */
+#define GKD_INPUT_ROUTE_UPDATE _IOW('G', 0xe4, struct gkd_menu_vt_config)
+/* Atomic game-route + optional held-source autofire. Old V2 operations retain
+ * their ABI; this extension requires explicit support from the kernel. */
+struct gkd_input_autofire_config { __u16 source, on_ms, off_ms, reserved; };
+struct gkd_input_route_repeat_config {
+    struct gkd_menu_vt_config route;
+    struct gkd_input_autofire_config repeat;
+};
+#define GKD_INPUT_ROUTE_REPEAT _IOW('G', 0xe5, struct gkd_input_route_repeat_config)
 #endif

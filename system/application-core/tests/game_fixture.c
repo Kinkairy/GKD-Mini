@@ -85,12 +85,18 @@ static FIXTURE_CHILD void game_leader(void)
     int listener = gkd_app_game_listen(identity.starttime);
     if (listener < 0) fixture_die(110);
     write_all(child_ready_pipe[1], "G", 1);
-    for(unsigned request=0;request<2;request++) {
+    for(unsigned request=0;request<3;request++) {
         struct pollfd wait = {listener, POLLIN, 0};unsigned operation;
         if (poll(&wait, 1, 4000) != 1 || !(wait.revents & POLLIN)) fixture_die(111);
         int client = gkd_app_game_accept_operation(listener, identity.starttime, &operation);
-        if (client < 0 || operation != (request ? GKD_GAME_EXIT : GKD_GAME_MENU) ||
-            gkd_app_game_reply_operation(client, operation, 0)) fixture_die(111);
+        if(client<0)fixture_die(111);
+        if(request==1){
+            struct gkd_game_orientation orientation=GKD_GAME_ORIENTATION_INIT;
+            orientation.aspect=GKD_ASPECT_PORTRAIT;orientation.source=GKD_ORIGIN_BURN_DRIVER;
+            orientation.scope=GKD_SCOPE_ACTIVE_DRIVER;
+            if(operation!=GKD_GAME_ORIENTATION||gkd_app_game_reply_orientation(client,&orientation))fixture_die(111);
+        }else if(operation!=(request?GKD_GAME_EXIT:GKD_GAME_MENU)||
+            gkd_app_game_reply_operation(client,operation,0))fixture_die(111);
     }
     close(listener);
     if (kill(emulator, SIGTERM)) fixture_die(112);
@@ -251,9 +257,11 @@ int main(int argc, char **argv)
     read_all(reports_pipe[0], &ready, 1);
     assert(ready == 'I');
 
-    char output[128];
+    char output[512];
     assert(run_cli("check", host, init, output, sizeof(output)) == 0);
     assert(!strcmp(output, "IDLE\n"));
+    assert(!run_cli("orientation",host,init,output,sizeof(output)));
+    assert(strstr(output,"session=idle aspect=unknown "));
     assert(run_cli("exit", host, init, output, sizeof(output)) != 0);
     assert(!output[0]);
 
@@ -265,6 +273,8 @@ int main(int argc, char **argv)
     assert(!run_cli("menu",host,init,output,sizeof(output))&&!strcmp(output,"MENU_DELIVERED\n"));
     assert(!run_cli("check",host,init,output,sizeof(output))&&!strcmp(output,"ACTIVE\n"));
 
+    assert(!run_cli("orientation",host,init,output,sizeof(output)));
+    assert(strstr(output,"session=active aspect=portrait ")&&strstr(output,"source=burn-driver scope=active-driver"));
     char active_path[PATH_MAX];
     registry_path(active_path, sizeof(active_path));
     char *valid = read_file(active_path);
@@ -290,11 +300,15 @@ int main(int argc, char **argv)
     assert(!strcmp(output, "EXITED\n"));
     for (unsigned i = 0; i < 200 && access(active_path, F_OK) == 0; ++i) usleep(10000);
     assert(access(active_path, F_OK) && errno == ENOENT);
+    assert(!run_cli("orientation",host,init,output,sizeof(output)));
+    assert(strstr(output,"session=idle aspect=unknown "));
     char *menu_after = read_file(menu_path);
     assert(!strcmp(menu_before, menu_after));
     free(menu_before); free(menu_after);
     assert(run_cli("check", host, init, output, sizeof(output)) == 0);
     assert(!strcmp(output, "IDLE\n"));
+    assert(!run_cli("orientation",host,init,output,sizeof(output)));
+    assert(strstr(output,"session=idle aspect=unknown "));
 
     write_all(commands_pipe[1], "X", 1);
     int status;

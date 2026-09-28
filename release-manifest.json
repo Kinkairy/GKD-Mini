@@ -1,9 +1,9 @@
 {
   "project": "GKD Mini",
-  "version": "RC3.6",
+  "version": "RC3.7",
   "kind": "public-source-snapshot",
-  "source_ref": "7a5562a3ed4349d347ebb5ae4023e4f19f41d2c2",
-  "source_tree": "ce1a7105b8feb7b773d7ab2f657a2999d93f0c7b",
+  "source_ref": "62950e5cb3afcbe313b6ee7bfe81bed5274ffdb8",
+  "source_tree": "62950e5cb3afcbe313b6ee7bfe81bed5274ffdb8",
   "firmware_distributed": false,
   "full_public_firmware_build_verified": false,
   "omitted_build_inputs": [
@@ -26,8 +26,8 @@
       "mode": "100644"
     },
     "CHANGELOG.md": {
-      "sha256": "f50d11a316081046781d6ff74e4313c1c9c31d04e76bf4562ef36457eee6f9b1",
-      "bytes": 1162,
+      "sha256": "6ced77c184e0787bb52d0b5ced5fe1c94734422616073799ddac279ea6532cd6",
+      "bytes": 1701,
       "mode": "100644"
     },
     "CONTRIBUTING.md": {
@@ -46,17 +46,17 @@
       "mode": "100644"
     },
     "README.md": {
-      "sha256": "8aec51e50a62fd0562da37a5f36b26958e86be38a5b7df7fd3ed81171ba10f9b",
-      "bytes": 2939,
+      "sha256": "67a34b6041e2c44c1d1afe489748f577c28a94191d152d11fa710d71eb475913",
+      "bytes": 3077,
       "mode": "100644"
     },
     "SECURITY.md": {
-      "sha256": "3995869368174202c6e40f76fc1cd3304cfd91e18e88746fcfa9186f618bc809",
+      "sha256": "af32434e0d127ee261e082ce9de9e30f57b45eee9d0c88ed8dcd10c5fe0ad38e",
       "bytes": 830,
       "mode": "100644"
     },
     "VERSION": {
-      "sha256": "ea5a130c2c5447d5f374b92f0a0a5c9131e07bd6616a170b5546add17a4769e4",
+      "sha256": "26ea67fdc8de734e9159df0df9a3694d235e19017f1730e347e56c0be5fdadee",
       "bytes": 6,
       "mode": "100644"
     },
@@ -95,24 +95,29 @@
       "bytes": 1346,
       "mode": "100644"
     },
+    "build/rc3.7-inputs.json": {
+      "sha256": "19412de1c3ef7a41bb1b2a7446a78b1dcd5e1ea55f05262b92180cd60eafa75e",
+      "bytes": 1490,
+      "mode": "100644"
+    },
     "docs/ARCHITECTURE.md": {
-      "sha256": "741dba70376989a2db962fc76352f02dd30065b48ec533f0f95b58c40c01cfea",
+      "sha256": "787b17258ca08606e51b697c1e89d16b80b6dc0cfc65cc43c69602d1616d0be3",
       "bytes": 1179,
       "mode": "100644"
     },
     "docs/BUILDING.md": {
-      "sha256": "2f4c218ff3a89f58305e58ca5b5b8d2a487abefeb18bcfbfce6f08227058a4f2",
+      "sha256": "28d902e11a87728f725b0d36f018f28fa0221c2559ddb21875fad29ca65623bf",
       "bytes": 2805,
       "mode": "100644"
     },
     "docs/CONFIGURATION.md": {
-      "sha256": "78580c0464ee1920ef376128df1c110d6b5906f598aa4fbc57d12952b407d308",
-      "bytes": 1656,
+      "sha256": "aeb639438956ffddcac44756e2d2d40c58ba82e3b852cbff9c98978a1a43a77e",
+      "bytes": 2212,
       "mode": "100644"
     },
     "docs/STATUS.md": {
-      "sha256": "786b016fdf5ad212bb75d97977df530601609dfbcf81abd56a86eb59e67ad8f4",
-      "bytes": 2622,
+      "sha256": "bc892e5c9f31c533a9ce05b2fc242f13033ce727b0eb1f259d8f28f99c2e21d7",
+      "bytes": 2266,
       "mode": "100644"
     },
     "kernel/current/config/rc34.config": {
@@ -186,8 +191,8 @@
       "mode": "100644"
     },
     "kernel/current/menu/gkd-menu-vt.inc": {
-      "sha256": "dfb6f44306a0f538389bc14c84830ceed8cffecc1a674c6fb5e58b35d38d4432",
-      "bytes": 18070,
+      "sha256": "66547ee2bb7e2d831d680f675e66fe0a9fe4b395d912e1bd94ee750d3a12252b",
+      "bytes": 23248,
       "mode": "100644"
     },
     "kernel/current/patches/0001-rc34-accepted-kernel.patch": {
@@ -326,8 +331,8 @@
       "mode": "100644"
     },
     "kernel/current/tests/input_route_fixture.c": {
-      "sha256": "8eeb1be458f10d92722222d10ea4e20894ff7ad895fb2cdf30c1d0798aecef28",
-      "bytes": 11358,
+      "sha256": "5a0f27cdee5fdb6e0da192e0b5c5957ed9f32e0a92e1dd55f46f3b28e63e7c44",
+      "bytes": 20289,
       "mode": "100644"
     },
     "kernel/current/tests/run_application_audio_resume_tests.sh": {
@@ -351,8 +356,8 @@
       "mode": "100644"
     },
     "kernel/current/tests/run_input_route_tests.py": {
-      "sha256": "de075ac81402065c471cb0a545f7904d491c09b1da30d8596875adc38f415dc7",
-      "bytes": 2079,
+      "sha256": "5cf19752a3d913d39271f15366f64e05835bbcaaca7b0841c4b12ce084bf26b8",
+      "bytes": 2076,
       "mode": "100644"
     },
     "kernel/current/tests/run_user_plane_tests.sh": {
@@ -386,12 +391,12 @@
       "mode": "100644"
     },
     "system/application-core/config/input-routing.conf": {
-      "sha256": "b7e1e01723433f06ec422f1efbc59891d200e82527a636f09eefc986bcd2a211",
-      "bytes": 5826,
+      "sha256": "5f32e9b1a0adcfad3cd5dac5a1dba268354f3b1f04707b600791c7d0573d5bbe",
+      "bytes": 6162,
       "mode": "100644"
     },
     "system/application-core/config/minimal-a-manifest.json": {
-      "sha256": "3de64449040f32230e430f0c416dfcbdf244b27be7df484703311cc6b3359e62",
+      "sha256": "e20bbdc52c35201a544d12ddcaa78e8e32649c1841c57e44fd8665865b2e466d",
       "bytes": 5153,
       "mode": "100644"
     },
@@ -476,8 +481,8 @@
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-fps-launch.h": {
-      "sha256": "379c670785bda7fba4e7ec35ece6c7d4c836236738730f1952973c191408f422",
-      "bytes": 844,
+      "sha256": "fa8f1b698deaff88dd62472c0a18bbb5b437065e36120a6907b4994e745968d9",
+      "bytes": 1001,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-fps.h": {
@@ -486,8 +491,8 @@
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-game-control.h": {
-      "sha256": "11fd3ae4336fe72fecb00af451ec30217e160d9c85144cde1181e20bb30dff89",
-      "bytes": 793,
+      "sha256": "3a4f62614521b0ece41aac047af1b473b92a79d9add6df2405bcf8adbe1d0a32",
+      "bytes": 1026,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-identity.h": {
@@ -526,18 +531,23 @@
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-menu-config.h": {
-      "sha256": "1b892c9e5e1a16c131874cc6f435d889300d3b82ca0a12eff26420303e56b26d",
-      "bytes": 2468,
+      "sha256": "dad6de110f4be3ca35e98211c7a9378ccbada819afb3cced3fd81f22e2dccfe0",
+      "bytes": 2850,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-menu-launch.h": {
-      "sha256": "63606b660321e945ca44d59d37e86c41970e97a74fd4e21d7de140e045eda95c",
-      "bytes": 603,
+      "sha256": "1e3feb00c0b4d898d414096f897893157cad5ed1e088f22a08ddf4baafcfa33a",
+      "bytes": 875,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-namespace.h": {
       "sha256": "b5288f4ac4a237f458f68ba7a7a3299ac9fe744ba5ff942f1cf7c29c42fb7dcd",
       "bytes": 1074,
+      "mode": "100644"
+    },
+    "system/application-core/include/gkd-app-orientation.h": {
+      "sha256": "b8ccd42ff00964b8aacbcbe2a1285daea64d0b403b92bfd8f94e240d324e42c7",
+      "bytes": 810,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-output.h": {
@@ -546,8 +556,8 @@
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-payload.h": {
-      "sha256": "9c663c5999bf30c2c97db410969f012add8bd44fad1e2085990d710489a0077f",
-      "bytes": 889,
+      "sha256": "057b627674cdb97d1ebf26d0c04c6b46e90efc0e54b1b1678432d6dde514f043",
+      "bytes": 1179,
       "mode": "100644"
     },
     "system/application-core/include/gkd-app-prepare.h": {
@@ -610,9 +620,14 @@
       "bytes": 1802,
       "mode": "100644"
     },
+    "system/application-core/include/gkd-game-orientation.h": {
+      "sha256": "21365f3bd1a31751f0fa5a16f36b7f5e5b68c71360fefac66a04f6e0800403ff",
+      "bytes": 2548,
+      "mode": "100644"
+    },
     "system/application-core/include/gkd-menu-vt.h": {
-      "sha256": "8a6588c0c7e038cc2a358e1dd598c7592bf32cb6ad2e99c83dfceeea11481b8b",
-      "bytes": 1011,
+      "sha256": "39e09b646d18bf906314186252f646ac45e8c6a836a926c58eae7925c4614173",
+      "bytes": 1679,
       "mode": "100644"
     },
     "system/application-core/include/gkd-opk-plan.h": {
@@ -631,8 +646,8 @@
       "mode": "100644"
     },
     "system/application-core/scripts/build-launcher.py": {
-      "sha256": "8c41bc2764f3b2e62d8bd026c88f853769430283d42b22afafe1f46b734dbf6b",
-      "bytes": 9465,
+      "sha256": "68b775acadd38b02c9b24ce47746a814293ef15b4796977f67bc31a32a16d405",
+      "bytes": 9501,
       "mode": "100644"
     },
     "system/application-core/scripts/build-minimal-a.py": {
@@ -741,8 +756,8 @@
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-fps-launch.c": {
-      "sha256": "f03e71deedc0c4bdcf4353214b00b0b0b0c62f31f0eaed42d12dd8395eedfa67",
-      "bytes": 7174,
+      "sha256": "d7ba0b70c54e67ee28171fd72175f4b358d7f213ef86d96a7fe316c24f1a19de",
+      "bytes": 7792,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-fps.c": {
@@ -751,13 +766,13 @@
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-game-control.c": {
-      "sha256": "b6a53d983d6ffc62eb324c8a990fe717a98a774da01217030788391d14944ba6",
-      "bytes": 5878,
+      "sha256": "afddb10411a3b0b48c46bd22f2df7d98b887e0820792768e43ab02ca46a97000",
+      "bytes": 7318,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-game.c": {
-      "sha256": "853e7db0a42fecb743aff8dfb105af59e8537f26777957efbe3d17b2da5a438f",
-      "bytes": 8719,
+      "sha256": "ff8abb4c1f6729da97d25faf8d60b26a4e06015a173c559699a4a7d5153fe1f7",
+      "bytes": 9207,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-host.c": {
@@ -786,8 +801,8 @@
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-launcher.c": {
-      "sha256": "5ea15313aca7a0b9c9e18ee141cdee94371c8f284d57ded94689815493e69d00",
-      "bytes": 9339,
+      "sha256": "2dc4724f0f1a19c12904ee2594763e1f4d9be4888e4022653fa64dbd7bafb830",
+      "bytes": 9874,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-lifecycle.c": {
@@ -811,13 +826,13 @@
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-menu-config.c": {
-      "sha256": "ee22f3d6e8602e41aa6a2e2126425cb1c8de1bc12c7703c0190449adbce5a870",
-      "bytes": 13939,
+      "sha256": "dc277d027636b9be326ffd5cecfec2d341a31f1e19b566e342f6b13b4410ae38",
+      "bytes": 16788,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-menu-launch.c": {
-      "sha256": "bfd41c0e95b6e7a1107a066928a4d7c43f109d15ebf9b691d58d170e9cb556a9",
-      "bytes": 4802,
+      "sha256": "744f2cd923ec95c453c870c270933990f23208c74e63af37e4b9209a73e71fa3",
+      "bytes": 6163,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-namespace.c": {
@@ -825,9 +840,14 @@
       "bytes": 9900,
       "mode": "100644"
     },
+    "system/application-core/source/gkd-app-orientation.c": {
+      "sha256": "8f391fb21e0266751a23925935afd63982e1c92507ca8b8e0e63ebb805c8fc38",
+      "bytes": 9736,
+      "mode": "100644"
+    },
     "system/application-core/source/gkd-app-payload.c": {
-      "sha256": "edcfc658c233a0ac782f9afb15ce3ab3afc1b713b09ce566d4060c6208841f50",
-      "bytes": 8193,
+      "sha256": "8100eb7cb221f21ae859fd26b95fb9c7ab621e716cc225149f541a1312b58766",
+      "bytes": 10225,
       "mode": "100644"
     },
     "system/application-core/source/gkd-app-pidfd.h": {
@@ -881,8 +901,8 @@
       "mode": "100644"
     },
     "system/application-core/source/gkd-fps-present.c": {
-      "sha256": "6a5b94bc74a9b539552d3955da1e8e4a3b134e3bc1dcf7cd035b967425f83559",
-      "bytes": 6668,
+      "sha256": "0efe67339a4389a8b363dc8ff0a887ebdb1c932bc370a831cf684a17a6a119ac",
+      "bytes": 9072,
       "mode": "100644"
     },
     "system/application-core/source/gkd-menu-config.c": {
@@ -1001,8 +1021,8 @@
       "mode": "100644"
     },
     "system/application-core/tests/fps_launch_nonblock_fixture.c": {
-      "sha256": "0a88314e34c45404bde4e2ea52841d18d674e211a79cd922adbc54c279c2f02b",
-      "bytes": 4143,
+      "sha256": "11d509d9379c36f448bad40851055de6fc0fb98bd119b75e8f7b394c7bb3e886",
+      "bytes": 4980,
       "mode": "100644"
     },
     "system/application-core/tests/fps_non_sdl.c": {
@@ -1021,8 +1041,8 @@
       "mode": "100644"
     },
     "system/application-core/tests/game_fixture.c": {
-      "sha256": "263647a0622526804e4a3cac27ab86f257264fc767da060ace24fe809cbdca1e",
-      "bytes": 12440,
+      "sha256": "39d3d66b714f0132d51d9d4fa4d6c99132570ff3b8a78497a426284f88bba2e6",
+      "bytes": 13401,
       "mode": "100644"
     },
     "system/application-core/tests/host_service_app_fixture.c": {
@@ -1091,13 +1111,13 @@
       "mode": "100644"
     },
     "system/application-core/tests/menu_config_fixture.c": {
-      "sha256": "6c0503c7517abb52986e5bf26d88dcd5c569a5b8e9d0e4ac1e66b69787b140db",
-      "bytes": 9000,
+      "sha256": "3a81ffb22b108e6e5927ac1a6507ec01d67dd017f79a6c690a55b5920e0db034",
+      "bytes": 10153,
       "mode": "100644"
     },
     "system/application-core/tests/menu_launch_fixture.c": {
-      "sha256": "838907d832811b17d417b9d50d5d4de0ecd38dda93329ddeca7206605bc75400",
-      "bytes": 4646,
+      "sha256": "7348e4919a90d6787241958b8b3248cd7353b4f3acc8b613b23a8dd76d178feb",
+      "bytes": 10409,
       "mode": "100644"
     },
     "system/application-core/tests/opk_plan_probe.c": {
@@ -1105,14 +1125,29 @@
       "bytes": 513,
       "mode": "100644"
     },
+    "system/application-core/tests/orientation_fixture.c": {
+      "sha256": "a4eebb145a77942dd6319b4d378e04b59fe24efe4f809d9fcadbb53704621ef5",
+      "bytes": 1808,
+      "mode": "100644"
+    },
+    "system/application-core/tests/orientation_present_fixture.c": {
+      "sha256": "e5b05984667727ce35be9ed5d5455879ae63b8ec59904609dfc4f72b8cd2c5ce",
+      "bytes": 1562,
+      "mode": "100644"
+    },
     "system/application-core/tests/payload_fixture.c": {
-      "sha256": "2e3d3d70d7a423a81ecfe25fe1d7b4a6a4f6f99898efe7e8302dcbe0c2cf06a0",
-      "bytes": 3506,
+      "sha256": "1ed551a4849c022f6f12f9271c8c58a60b6ff82e02ccf02c6eac96b045b9c161",
+      "bytes": 5097,
       "mode": "100644"
     },
     "system/application-core/tests/payload_probe.c": {
       "sha256": "47444bbe875e7ace80e3e63c97bea8d21d9a4eb952e268df96a12908c75ac3b6",
       "bytes": 1525,
+      "mode": "100644"
+    },
+    "system/application-core/tests/portrait_payload_fixture.c": {
+      "sha256": "3e4b0393fc9a998a6839f6eff3fc623506a65c8e9330dc3eb6b8b79aa97415ac",
+      "bytes": 5107,
       "mode": "100644"
     },
     "system/application-core/tests/prepare_mount_fixture.c": {
@@ -1196,8 +1231,8 @@
       "mode": "100644"
     },
     "system/application-core/tests/run_launcher_tests.py": {
-      "sha256": "6826f61f7c2a180bd2797a35feef22731902e21b6cc930695cf781b070e2deb9",
-      "bytes": 2312,
+      "sha256": "88dd308eed864b866a7fd911838cac3e36ce564b73799e03746b75b58054b92e",
+      "bytes": 2435,
       "mode": "100644"
     },
     "system/application-core/tests/run_loop_tests.sh": {
@@ -1224,6 +1259,11 @@
       "sha256": "2c775b20d5c951efb68921973d62fcea44912f097b63d6d26db2293560abcfb4",
       "bytes": 1174,
       "mode": "100755"
+    },
+    "system/application-core/tests/run_orientation_tests.py": {
+      "sha256": "e1d9c84b032b7d4a45d6ce8420840ea4f753939053e9382545df2aa5ab8f47b4",
+      "bytes": 7442,
+      "mode": "100644"
     },
     "system/application-core/tests/run_prepare_mount_tests.sh": {
       "sha256": "ef9e39714acbb2d2411715e397b07be9ee593336c00d9714c563678a689352ff",
@@ -2391,7 +2431,7 @@
       "mode": "100755"
     },
     "tools/gkd-build-release.py": {
-      "sha256": "ad800532ef7529e0ab227388fe71e7c71fcbcdee7bdb2b9591b4749ddd414b2b",
+      "sha256": "72da7f682b35b4ab44dc30065db1113b201880f73cdec8253705942e35cf5861",
       "bytes": 4226,
       "mode": "100644"
     },
@@ -2415,6 +2455,11 @@
       "bytes": 680,
       "mode": "100755"
     },
+    "tools/patch-simplemenu-alias-key.py": {
+      "sha256": "5a9d33a3896f6ef9fc50897cb0a08b6006f3eb07ec25ac5b59c10d53f5bf274b",
+      "bytes": 2226,
+      "mode": "100644"
+    },
     "tools/tests/run_audit_suite.py": {
       "sha256": "96b95dc7fed9847c56f3f1c466fd7b6c089a125b937a109abffb66e686dcf416",
       "bytes": 6987,
@@ -2426,7 +2471,7 @@
       "mode": "100644"
     },
     "tools/tests/test_release_guards.py": {
-      "sha256": "22c9ea7a8b4e28764a73085ac9c56adfbad956082ede8ba3f2221d0126693173",
+      "sha256": "f188eefcc74ee733e1ec7157fab4d248c1ae0a26fbc7299b7867fe3d32083746",
       "bytes": 4588,
       "mode": "100644"
     },
@@ -2436,8 +2481,8 @@
       "mode": "100755"
     },
     "validate_release.py": {
-      "sha256": "697a37fa6fc0b54dfaebdf4f56e00028ec7250747a45e273343723fa3e57b370",
-      "bytes": 1406,
+      "sha256": "59c35cad0d7cf60a1f20b57beaf0238bfa547a38afd16cad150064d3ad1b6768",
+      "bytes": 1532,
       "mode": "100644"
     }
   }

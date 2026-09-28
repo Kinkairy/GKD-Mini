@@ -4,7 +4,7 @@ This is a source snapshot, not a self-contained firmware SDK. Do not interpret a
 
 ## External inputs
 
-`build/rc3.6-inputs.json` records pinned hashes for the userspace partition input, BusyBox archive, slot-header template, kernel commit, builder image and toolchains. The partition and template are not provided: they contain device-specific/dependency material whose redistribution has not been cleared. Supply only inputs obtained lawfully and reviewed independently.
+`build/rc3.7-inputs.json` records pinned hashes for the userspace partition input, BusyBox archive, slot-header template, kernel commit, builder image and toolchains. The partition and template are not provided: they contain device-specific/dependency material whose redistribution has not been cleared. Supply only inputs obtained lawfully and reviewed independently.
 
 The legacy build wrappers retain strict input hashes and output guards. Their original host paths are normalized in this snapshot:
 
@@ -13,7 +13,7 @@ The legacy build wrappers retain strict input hashes and output guards. Their or
 - dependency root / generic build home: `/opt/gkd-build`
 - shared cross-build layout: `/srv/c-builder`
 
-These are documented layout templates, not a claim that those dependencies are installed. The container Dockerfiles are historical dependency recipes; the accepted build image digest is in `build/rc3.6-inputs.json`. Rebuilding a Dockerfile is not guaranteed to reproduce that exact image digest. The entire firmware build has not been rerun from this public tree.
+These are documented layout templates, not a claim that those dependencies are installed. The container Dockerfiles are historical dependency recipes; the accepted build image digest is in `build/rc3.7-inputs.json`. Rebuilding a Dockerfile is not guaranteed to reproduce that exact image digest. The entire firmware build has not been rerun from this public tree.
 
 The original `system/ui-core/assets/recovery-boot.png` is omitted pending artwork provenance review. The recovery build and boot-art test still require an appropriately licensed image at that location. Its generator is retained; the omission is deliberate rather than a silent replacement of the accepted artwork.
 

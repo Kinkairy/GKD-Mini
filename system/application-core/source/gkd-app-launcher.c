@@ -3,6 +3,7 @@
 #include "gkd-opk-plan.h"
 #include "gkd-app-loop.h"
 #include "gkd-app-payload.h"
+#include "gkd-app-orientation.h"
 #include "gkd-app-fps-launch.h"
 #include "gkd-app-game-control.h"
 #include "gkd-app-menu-launch.h"
@@ -105,6 +106,7 @@ int main(int argc,char **argv)
     struct gkd_app_loop lease=GKD_APP_LOOP_INIT;
     struct gkd_app_payload_result result={0,-1,0,1};
     struct gkd_app_fps_launch fps=GKD_APP_FPS_LAUNCH_INIT;
+    struct gkd_app_orientation orientation=GKD_APP_ORIENTATION_INIT;
     struct gkd_app_menu_launch menu=GKD_APP_MENU_LAUNCH_INIT;
     int image=-1,error=0,reaped=0,mounted=0,made=0,rc=125;
     char game_image[4096];
@@ -118,6 +120,7 @@ int main(int argc,char **argv)
     char image_path[64];snprintf(image_path,sizeof(image_path),"/proc/self/fd/%d",image);
     if(gkd_opk_plan_open(image_path,metadata,argc-optind-1,argv+optind+1,&plan)){error=errno;goto done;}
     if(gkd_app_menu_prepare(&menu,image,plan.desktop,plan.argv[0],argc-optind-1,argv+optind+1)){error=errno;goto done;}
+    gkd_app_orientation_prepare(&orientation,&menu.profile,argc-optind-1,argv+optind+1);
     /* Native A uses the already enabled 320x240 software presentation and
      * dummy VT console; it has no optional legacy scaling/console switch.
      * Joystick remapping and gsensor are absent on this fixed board. */
@@ -131,13 +134,15 @@ int main(int argc,char **argv)
     if(mkdir(target,0700)){error=errno;goto done;}made=1;
     if(gkd_app_loop_mount_owned(image,target,owner,&lease)){error=errno;goto done;}mounted=1;
     close(image);image=-1;
-    (void)gkd_app_fps_launch_prepare(&fps,plan.argv[0],target,getenv("GKD_PAYLOAD_PRELOAD"));
+    (void)gkd_app_fps_launch_prepare_orientation(&fps,plan.argv[0],target,getenv("GKD_PAYLOAD_PRELOAD"),orientation.fd,&orientation.lifetime);
     if(notice){(void)gkd_app_game_wait(0);notice=0;}
-    int ran=gkd_app_payload_run_menu(plan.argv,target,listener,start,&stopping,&fps,&menu,&result);
+    int ran=gkd_app_payload_run_orientation(plan.argv,target,listener,start,&stopping,&fps,&menu,&orientation,&result);
     reaped=result.reaped;
     if(ran){error=errno;goto done;}
     rc=WIFEXITED(result.wait_status)?WEXITSTATUS(result.wait_status):128+WTERMSIG(result.wait_status);
 done:;
+    if(result.reaped)gkd_app_menu_close(&menu);
+    gkd_app_orientation_close(&orientation);
     if(!notice)notice=!gkd_app_game_wait(1);
     /* A failed clear must keep the original lease fd and the launcher lock.
      * Holding it prevents a later launch from taking over an unresolved loop.
@@ -164,7 +169,8 @@ done:;
         if(polled>0&&(pending.revents&POLLIN))
         {
             unsigned operation;int client=gkd_app_game_accept_operation(listener,start,&operation);
-            if(client>=0&&operation==GKD_GAME_MENU)(void)gkd_app_game_reply_operation(client,operation,EBUSY);
+            if(client>=0&&operation==GKD_GAME_ORIENTATION){struct gkd_game_orientation unknown=GKD_GAME_ORIENTATION_INIT;(void)gkd_app_game_reply_orientation(client,&unknown);}
+            else if(client>=0&&operation==GKD_GAME_MENU)(void)gkd_app_game_reply_operation(client,operation,EBUSY);
             else result.client=client;
         }
     } while(1);

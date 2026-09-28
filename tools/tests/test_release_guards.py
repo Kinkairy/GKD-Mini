@@ -23,10 +23,10 @@ class ReleaseGuards(unittest.TestCase):
             (repo / "build").mkdir(parents=True)
             (repo / "system").mkdir()
             inputs.mkdir(); scratch.mkdir()
-            (repo / "VERSION").write_text("BAD\n" if scenario == "version" else "RC3.6\n")
+            (repo / "VERSION").write_text("BAD\n" if scenario == "version" else "RC3.7\n")
             item = repo / "system/fixture.c"
             item.write_text("unchanged\n")
-            manifest = {"release": "RC3.6", "builder_image": "fixture-builder", "files": {}}
+            manifest = {"release": "RC3.7", "builder_image": "fixture-builder", "files": {}}
             for name in ("p1.img", "slot-header-template.bin", "busybox-1.22.1.tar.bz2"):
                 data = b"fixture-not-firmware"
                 (inputs / name).write_bytes(data)
@@ -36,7 +36,7 @@ class ReleaseGuards(unittest.TestCase):
             if scenario == "symlink":
                 (inputs / "p1.img").rename(inputs / "real.img")
                 (inputs / "p1.img").symlink_to("real.img")
-            (repo / "build/rc3.6-inputs.json").write_text(json.dumps(manifest))
+            (repo / "build/rc3.7-inputs.json").write_text(json.dumps(manifest))
             module = {"__file__": str(DRIVER), "__name__": "guard_fixture"}
             exec(compile(DRIVER.read_text(), str(DRIVER), "exec", optimize=optimize), module)
             module["ROOT"] = repo

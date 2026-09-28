@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +15,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-static int force_eagain,gate_calls;
+static int force_eagain,gate_calls,gate_result;
 long __real_syscall(long number,...);
 long __wrap_syscall(long number,...)
 {
@@ -36,7 +37,7 @@ int gkd_app_fps_gate(int executable,int directory,const char *environment,
                      const struct gkd_app_fps_gate_paths *paths)
 {
     (void)executable;(void)directory;(void)environment;(void)paths;
-    gate_calls++;return 0;
+    gate_calls++;return gate_result;
 }
 int gkd_app_fps_test_random_session(unsigned char value[16]);
 int gkd_app_fps_test_exchange(const char packet[47],int reader,int lifetime);
@@ -90,6 +91,17 @@ int main(void)
     assert(launch.executable_fd<0&&launch.counter_fd<0&&launch.lifetime_fd<0&&
            !launch.preload&&!gate_calls);
     int status;assert(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status));
+    close(server);unlink("/tmp/gkd-fps-nonblock.sock");
+    server=listening();child=fork();assert(child>=0);
+    if(!child){disabled_server(server);_exit(0);}
+    int orientation=open("/dev/null",O_RDONLY|O_CLOEXEC),life=-1;assert(orientation>=3);
+    gate_result=1;
+    assert(!gkd_app_fps_launch_prepare_orientation(&launch,"/bin/true","/","/compat.so",orientation,&life));
+    assert(launch.executable_fd>=3&&launch.orientation_fd>=3&&life>=3&&gate_calls==1);
+    struct pollfd observer={life,POLLIN,0};assert(poll(&observer,1,0)==0);
+    gkd_app_fps_launch_close(&launch);assert(poll(&observer,1,0)==1&&(observer.revents&POLLHUP));
+    assert(fcntl(orientation,F_GETFD)>=0);close(orientation);close(life);
+    assert(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status));
     close(server);unlink("/tmp/gkd-fps-nonblock.sock");
     printf("GKD_FPS_LAUNCH_NONBLOCK=PASS getrandom-eagain exchange_ms=%llu disabled-gate-skipped=1\n",elapsed);
     return 0;

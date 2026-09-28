@@ -20,16 +20,16 @@ base = ["docker", "run", "--rm", "--network", "none", "--cap-add", "SYS_ADMIN",
         "-v", str(out)+":/out:rw", image]
 app = "/src/system/application-core"
 for variant, flags in (("normal", []), ("ubsan", ["-fsanitize=undefined", "-fno-sanitize-recover=all"])):
-    for test in ("payload", "launcher"):
+    for test in ("payload", "launcher", "portrait_payload"):
         binary = "/out/" + test + "-" + variant
         subprocess.run(base+["cc", "-std=gnu99", "-O2", "-Wall", "-Wextra", "-Werror",
             '-DGKD_APP_GAME_CLIENT="' + binary + '"', "-I"+app+"/include",
             "-I/src/system/ui-core/include", "-I/out", "-I/src/system/rc33-system-update/source"]+flags+[
-            app+"/source/gkd-app-payload.c", app+"/source/gkd-app-menu-launch.c", app+"/source/gkd-app-menu-config.c", app+"/source/gkd-app-settings.c", app+"/source/gkd-app-fps-launch.c",
+            app+"/source/gkd-app-payload.c", app+"/source/gkd-app-orientation.c", app+"/source/gkd-app-menu-launch.c", app+"/source/gkd-app-menu-config.c", app+"/source/gkd-app-settings.c", app+"/source/gkd-app-fps-launch.c",
             app+"/source/gkd-app-fps-gate.c",
             "/src/system/rc33-system-update/source/gkd-update-sha256.c",
             app+"/source/gkd-app-game-control.c",
-            app+"/tests/"+test+"_fixture.c", "-o", binary], check=True)
+            app+"/tests/"+test+"_fixture.c", "-lz", "-o", binary]+(["-Wl,--wrap=ioctl"] if test=="portrait_payload" else []), check=True)
         result = subprocess.run(base+["timeout", "15", binary], capture_output=True, text=True)
         (out/(test+"-"+variant+".log")).write_text(result.stdout+result.stderr)
         if result.returncode:

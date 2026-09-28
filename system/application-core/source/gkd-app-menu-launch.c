@@ -82,8 +82,35 @@ int gkd_app_menu_prepare(struct gkd_app_menu_launch *m,int opk,const char *deskt
   close(fd);errno=EPERM;return -1;
  }
  if(ioctl(fd,GKD_MENU_VT_CONFIG,&config)){int e=errno;close(fd);errno=e;return -1;}
- m->fd=fd;
+ m->fd=fd;m->base=config;m->portrait=0;m->orientation_disabled=0;
  fprintf(stderr,"GKD_INPUT_SESSION=READY style=%s maps=%u profile=%s action=%s keys=%u\n",gkd_input_style_name(settings.input_style),config.map_count,m->profile.id[0]?m->profile.id:"unknown",gkd_menu_action_name(m->profile.action),config.count);
+ return 0;
+}
+int gkd_app_menu_orientation(struct gkd_app_menu_launch *m,const struct gkd_game_orientation *state)
+{
+ if(!m||m->fd<0||m->orientation_disabled)return 0;
+ int portrait=gkd_game_orientation_valid(state)&&state->aspect==GKD_ASPECT_PORTRAIT;
+ if(portrait==m->portrait)return 0;
+ struct gkd_menu_vt_config next=m->base;
+ if(portrait&&gkd_input_route_portrait(&m->base,&m->profile,&next)){
+  if(errno!=EOPNOTSUPP&&errno!=E2BIG)return -1;
+  m->orientation_disabled=1;
+  fprintf(stderr,"GKD_PORTRAIT_INPUT=UNAVAILABLE reason=binding-conflict errno=%d\n",errno);
+  return 0;
+ }
+ struct gkd_input_route_repeat_config request={.route=next};
+ if(portrait)request.repeat=(struct gkd_input_autofire_config){KEY_LEFTCTRL,50,50,0};
+ if(ioctl(m->fd,GKD_INPUT_ROUTE_REPEAT,&request)){
+  if(errno==EBUSY)return 1;
+  /* Older RC3.6 kernels remain usable, but cannot run this new feature. */
+  if(errno==ENOTTY&&!m->portrait){
+   m->orientation_disabled=1;
+   fprintf(stderr,"GKD_PORTRAIT_INPUT=UNAVAILABLE reason=kernel-update-required\n");return 0;
+  }
+  return -1;
+ }
+ m->portrait=portrait;
+ fprintf(stderr,"GKD_PORTRAIT_INPUT=%s source=dot-and-a target=current-y repeat_hz=%d\n",portrait?"ENABLED":"RESTORED",portrait?10:0);
  return 0;
 }
 int gkd_app_menu_pulse(struct gkd_app_menu_launch *m)
@@ -110,4 +137,5 @@ int gkd_app_menu_cancel(struct gkd_app_menu_launch *m)
 void gkd_app_menu_close(struct gkd_app_menu_launch *m)
 {
  if(m&&m->fd>=0){close(m->fd);m->fd=-1;}
+ if(m){m->portrait=0;m->orientation_disabled=0;memset(&m->base,0,sizeof(m->base));}
 }

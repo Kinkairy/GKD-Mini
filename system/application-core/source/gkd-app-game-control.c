@@ -74,7 +74,7 @@ int gkd_app_game_accept_operation(int listener,unsigned long long start,unsigned
     if(getsockopt(fd,SOL_SOCKET,SO_PEERCRED,&peer,&n)||peer.uid!=0||peer.pid<=0||authorized_peer(peer.pid)||
        wait_read(fd,100)||recv(fd,&p,sizeof(p),MSG_TRUNC)!=(ssize_t)sizeof(p)||
        p.magic!=GAME_MAGIC||p.version!=2||p.reserved||
-       (p.operation!=GKD_GAME_EXIT&&p.operation!=GKD_GAME_MENU)||p.value!=start) {
+       (p.operation!=GKD_GAME_EXIT&&p.operation!=GKD_GAME_MENU&&p.operation!=GKD_GAME_ORIENTATION)||p.value!=start) {
         int e=errno?errno:EPROTO;close(fd);errno=e;return -1;
     }
     *operation=p.operation;return fd;
@@ -86,10 +86,10 @@ int gkd_app_game_reply_operation(int client,unsigned operation,int error)
     int rc=send(client,&p,sizeof(p),MSG_NOSIGNAL)==(ssize_t)sizeof(p)?0:-1;
     int e=errno;close(client);errno=e;return rc;
 }
-int gkd_app_game_request_operation(pid_t pid,unsigned long long start,int pidfd,unsigned operation)
+static int request(pid_t pid,unsigned long long start,int pidfd,unsigned operation,struct gkd_game_orientation *orientation)
 {
     struct sockaddr_un a;socklen_t n;int fd,rc=-1,e;
-    if(operation!=GKD_GAME_EXIT&&operation!=GKD_GAME_MENU){errno=EINVAL;return -1;}
+    if(operation!=GKD_GAME_EXIT&&operation!=GKD_GAME_MENU&&operation!=GKD_GAME_ORIENTATION){errno=EINVAL;return -1;}
     if(live(pidfd)||address(&a,pid,start,&n))return -1;
     fd=socket(AF_UNIX,SOCK_SEQPACKET|SOCK_CLOEXEC,0);if(fd<0)return -1;
     if(connect(fd,(struct sockaddr*)&a,n))goto out;
@@ -97,6 +97,15 @@ int gkd_app_game_request_operation(pid_t pid,unsigned long long start,int pidfd,
     if(getsockopt(fd,SOL_SOCKET,SO_PEERCRED,&peer,&sz)||peer.uid||peer.pid!=pid||live(pidfd)){errno=EPERM;goto out;}
     struct packet p={GAME_MAGIC,2,operation,0,start};
     if(send(fd,&p,sizeof(p),MSG_NOSIGNAL)!=(ssize_t)sizeof(p)||wait_read(fd,4000))goto out;
+    if(operation==GKD_GAME_ORIENTATION){
+        struct {struct packet header;struct gkd_game_orientation state;} reply;
+        if(!orientation||recv(fd,&reply,sizeof(reply),MSG_TRUNC)!=(ssize_t)sizeof(reply)||
+           reply.header.magic!=GAME_MAGIC||reply.header.version!=2||reply.header.operation!=operation||
+           reply.header.reserved||reply.header.value||!gkd_game_orientation_valid(&reply.state)){
+            errno=EPROTO;goto out;
+        }
+        *orientation=reply.state;rc=0;goto out;
+    }
     if(recv(fd,&p,sizeof(p),MSG_TRUNC)!=(ssize_t)sizeof(p)||p.magic!=GAME_MAGIC||p.version!=2||p.operation!=operation||p.reserved||p.value>4095){errno=EPROTO;goto out;}
     if(p.value){errno=(int)p.value;goto out;}rc=0;
 out:e=errno;close(fd);errno=e;return rc;
@@ -129,4 +138,15 @@ int gkd_app_game_wait(int active)
     if(strcmp(reply,"GKD_APPLICATION_COMMAND=ACCEPTED errno=0\n")){errno=EPROTO;goto done;}
     result=0;
 done:saved=errno;close(fd);errno=saved;return result;
+}
+
+int gkd_app_game_request_operation(pid_t pid,unsigned long long start,int pidfd,unsigned operation)
+{if(operation==GKD_GAME_ORIENTATION){errno=EINVAL;return -1;}return request(pid,start,pidfd,operation,NULL);}
+int gkd_app_game_request_orientation(pid_t pid,unsigned long long start,int pidfd,struct gkd_game_orientation *out)
+{if(!out){errno=EINVAL;return -1;}*out=(struct gkd_game_orientation)GKD_GAME_ORIENTATION_INIT;return request(pid,start,pidfd,GKD_GAME_ORIENTATION,out);}
+int gkd_app_game_reply_orientation(int client,const struct gkd_game_orientation *state)
+{
+    struct {struct packet header;struct gkd_game_orientation state;} reply={{GAME_MAGIC,2,GKD_GAME_ORIENTATION,0,0},*state};
+    int rc=send(client,&reply,sizeof(reply),MSG_NOSIGNAL)==(ssize_t)sizeof(reply)?0:-1;
+    int e=errno;close(client);errno=e;return rc;
 }

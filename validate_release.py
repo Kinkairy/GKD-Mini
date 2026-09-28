@@ -10,6 +10,8 @@ manifest = json.loads((root / "release-manifest.json").read_text())
 expected = manifest["files"]
 actual = {}
 errors = []
+if manifest.get("version") != (root / "VERSION").read_text().strip():
+    errors.append("VERSION: release manifest mismatch")
 for p in root.rglob("*"):
     relative = p.relative_to(root)
     if ".git" in relative.parts or "__pycache__" in relative.parts:

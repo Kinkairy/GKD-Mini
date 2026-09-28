@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #define _GNU_SOURCE
 #include "gkd-app-payload.h"
+#include "gkd-app-orientation.h"
 #include "gkd-app-fps-launch.h"
 #include "gkd-fps-counter.h"
 #include "gkd-app-game-control.h"
@@ -26,20 +27,23 @@ static int fps_valid(const struct gkd_app_fps_launch *f)
        strlen(f->session)!=32U)return 0;
     if(f->executable_fd==f->counter_fd||f->executable_fd==f->lifetime_fd||
        f->counter_fd==f->lifetime_fd)return 0;
+    if(f->orientation_fd>=3&&(f->orientation_fd==f->executable_fd||f->orientation_fd==f->counter_fd||f->orientation_fd==f->lifetime_fd))return 0;
     return 1;
 }
 static int fps_stage(const struct gkd_app_fps_launch *f)
 {
-    int staged[3]={-1,-1,-1},saved;
-    for(unsigned i=0;i<3;i++){
-        int source=i?i==1?f->counter_fd:f->lifetime_fd:f->executable_fd;
+    int staged[4]={-1,-1,-1,-1},saved;
+    unsigned count=f->orientation_fd>=3?4U:3U;
+    for(unsigned i=0;i<count;i++){
+        int source=i==3?f->orientation_fd:i?i==1?f->counter_fd:f->lifetime_fd:f->executable_fd;
         staged[i]=fcntl(source,F_DUPFD_CLOEXEC,16);if(staged[i]<0)goto fail;
     }
     if(dup3(staged[0],3,O_CLOEXEC)<0||dup3(staged[1],4,O_CLOEXEC)<0||
        dup3(staged[2],5,O_CLOEXEC)<0)goto fail;
-    for(unsigned i=0;i<3;i++)close(staged[i]);
-    return syscall(SYS_close_range,6U,~0U,0U);
-fail:saved=errno;for(unsigned i=0;i<3;i++)if(staged[i]>=0)close(staged[i]);errno=saved;return -1;
+    if(count==4U&&dup3(staged[3],6,O_CLOEXEC)<0)goto fail;
+    for(unsigned i=0;i<count;i++)close(staged[i]);
+    return syscall(SYS_close_range,count==4U?7U:6U,~0U,0U);
+fail:saved=errno;for(unsigned i=0;i<4;i++)if(staged[i]>=0)close(staged[i]);errno=saved;return -1;
 }
 static void fps_environment(const struct gkd_app_fps_launch *f)
 {
@@ -51,6 +55,8 @@ static void fps_environment(const struct gkd_app_fps_launch *f)
        setenv(GKD_FPS_LIFETIME_FD_ENV,lifetime,1)||
        setenv(GKD_FPS_SESSION_ENV,f->session,1)||
        setenv(GKD_FPS_PRELOAD_PATH_ENV,GKD_APP_FPS_INTERPOSER,1))_exit(126);
+    unsetenv(GKD_ORIENTATION_FD_ENV);
+    if(f->orientation_fd>=3&&(fcntl(6,F_SETFD,0)||setenv(GKD_ORIENTATION_FD_ENV,"6",1)))_exit(126);
     unsetenv("GKD_PAYLOAD_PRELOAD");
 }
 static int worker(void *opaque)
@@ -68,7 +74,7 @@ static int worker(void *opaque)
     if(sigprocmask(SIG_SETMASK,&none,NULL))return 125;
     struct sigaction sa;memset(&sa,0,sizeof(sa));sa.sa_handler=SIG_DFL;sigemptyset(&sa.sa_mask);
     for(int s=1;s<NSIG;s++)if(s!=SIGKILL&&s!=SIGSTOP)(void)sigaction(s,&sa,NULL);
-    pid_t payload=fork();if(payload<0){if(fps){close(3);close(4);close(5);}return 125;}
+    pid_t payload=fork();if(payload<0){if(fps){close(3);close(4);close(5);if(c->fps.orientation_fd>=3)close(6);}return 125;}
     if(!payload){
         if(setsid()<0||seteuid(getuid()))_exit(126);
         if(fps){
@@ -84,7 +90,7 @@ static int worker(void *opaque)
         }
         _exit(errno==ENOENT?127:126);
     }
-    if(fps){close(3);close(4);close(5);}
+    if(fps){close(3);close(4);close(5);if(c->fps.orientation_fd>=3)close(6);}
     int primary=125,status;pid_t got;
     for(;;){
         got=waitpid(-1,&status,0);
@@ -93,14 +99,21 @@ static int worker(void *opaque)
     }
     return primary;
 }
-int gkd_app_payload_run_menu(char *const argv[],const char *directory,int listener,
+static int orientation_route(struct gkd_app_menu_launch *menu,struct gkd_app_orientation *orientation)
+{
+ struct gkd_game_orientation state=GKD_GAME_ORIENTATION_INIT;
+ gkd_app_orientation_read(orientation,&state);
+ return gkd_app_menu_orientation(menu,&state);
+}
+int gkd_app_payload_run_orientation(char *const argv[],const char *directory,int listener,
                         unsigned long long start,volatile sig_atomic_t *stopping,
                         struct gkd_app_fps_launch *fps,
-                        struct gkd_app_menu_launch *menu,struct gkd_app_payload_result *r)
+                        struct gkd_app_menu_launch *menu,struct gkd_app_orientation *orientation,struct gkd_app_payload_result *r)
 {
     if(!argv||!argv[0]||!directory||directory[0]!='/'||listener<0||
        fcntl(listener,F_GETFD)<0||!stopping||!r){errno=EINVAL;return -1;}
     memset(r,0,sizeof(*r));r->client=-1;r->reaped=1;
+    if(orientation_route(menu,orientation)<0)return -1;
     int parent_guard=(int)syscall(SYS_pidfd_open,getpid(),0);if(parent_guard<0)return -1;
     void *stack=malloc(256*1024);if(!stack){close(parent_guard);return -1;}
     struct context c={argv,directory,parent_guard,GKD_APP_FPS_LAUNCH_INIT};
@@ -119,7 +132,11 @@ int gkd_app_payload_run_menu(char *const argv[],const char *directory,int listen
     int failure=0,sent=0,menu_client=-1;
     for(;;){
         struct pollfd fds[4]={{child,POLLIN,0},{listener,POLLIN,0},{menu?menu->fd:-1,POLLIN,0},{menu_client,0,0}};
-        int rc=poll(fds,4,*stopping?0:-1);
+        /* Arcade metadata arrives after the first presented frame. Retry
+         * busy route changes without reopening the lease or changing holds. */
+        int watch=orientation&&menu&&menu->fd>=0&&!menu->orientation_disabled&&
+            (orientation->page||(orientation->launch.aspect==GKD_ASPECT_PORTRAIT&&!menu->portrait));
+        int rc=poll(fds,4,*stopping?0:watch?100:-1);
         if(rc<0&&errno!=EINTR){failure=errno;*stopping=1;}
         if(rc>0&&((fds[0].revents&(POLLNVAL|POLLERR))||
            (fds[1].revents&(POLLNVAL|POLLERR|POLLHUP)))){failure=EBADF;*stopping=1;}
@@ -132,6 +149,11 @@ int gkd_app_payload_run_menu(char *const argv[],const char *directory,int listen
             unsigned operation;int client=gkd_app_game_accept_operation(listener,start,&operation);
             if(client>=0){
                 if(operation==GKD_GAME_EXIT){if(r->client<0){r->client=client;*stopping=1;}else (void)gkd_app_game_reply(client,EBUSY);}
+                else if(operation==GKD_GAME_ORIENTATION){
+                    struct gkd_game_orientation state=GKD_GAME_ORIENTATION_INIT;
+                    if(!*stopping&&!(fds[0].revents&POLLIN))gkd_app_orientation_read(orientation,&state);
+                    (void)gkd_app_game_reply_orientation(client,&state);
+                }
                 else if(*stopping||(fds[0].revents&POLLIN)) (void)gkd_app_game_reply_operation(client,GKD_GAME_MENU,ECANCELED);
                 else if(menu_client>=0) (void)gkd_app_game_reply_operation(client,GKD_GAME_MENU,EBUSY);
                 else if(gkd_app_menu_pulse(menu)) (void)gkd_app_game_reply_operation(client,GKD_GAME_MENU,errno);
@@ -157,6 +179,7 @@ int gkd_app_payload_run_menu(char *const argv[],const char *directory,int listen
         pid_t got=waitpid(init,&r->wait_status,WNOHANG);
         if(got==init){r->reaped=1;break;}
         if(got<0&&errno!=EINTR){failure=errno;break;}
+        if(!*stopping&&orientation_route(menu,orientation)<0){failure=errno;*stopping=1;}
         if(sent){struct pollfd p={child,POLLIN,0};(void)poll(&p,1,20);}
     }
     if(gkd_app_menu_cancel(menu)&&!failure)failure=errno;
@@ -169,3 +192,8 @@ int gkd_app_payload_run(char *const argv[],const char *directory,int listener,
  unsigned long long start,volatile sig_atomic_t *stopping,struct gkd_app_fps_launch *fps,
  struct gkd_app_payload_result *result)
 {return gkd_app_payload_run_menu(argv,directory,listener,start,stopping,fps,NULL,result);}
+
+int gkd_app_payload_run_menu(char *const argv[],const char *directory,int listener,
+ unsigned long long start,volatile sig_atomic_t *stopping,struct gkd_app_fps_launch *fps,
+ struct gkd_app_menu_launch *menu,struct gkd_app_payload_result *result)
+{return gkd_app_payload_run_orientation(argv,directory,listener,start,stopping,fps,menu,NULL,result);}
